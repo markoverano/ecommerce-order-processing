@@ -1,0 +1,43 @@
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+.idea/
+*.DotSettings.user
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# Test results
+TestResults/
+coverage/
+*.trx
+*.coveragexml
+
+# Logs
+*.log
+logs/
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Publish output
+publish/
