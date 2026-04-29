@@ -1,0 +1,27 @@
+# Requires: Docker 24+ with Compose v2 (docker compose up -d)
+
+version: "3.9"
+
+networks:
+  ecommerce:
+    driver: bridge
+
+volumes:
+
+services:
+
+  # ── Message Broker ─────────────────────────────────────────────────────────
+  rabbitmq:
+
+
+  # ── Database ────────────────────────────────────────────────────────────────
+
+  # ── Cache ───────────────────────────────────────────────────────────────────
+
+  # ── Tracing ─────────────────────────────────────────────────────────────────
+
+  # ── Metrics ─────────────────────────────────────────────────────────────────
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+  # Each service builds from the local Dockerfile. All env vars pull from .env.
+  # Run `docker compose build` before `docker compose up` on first use.

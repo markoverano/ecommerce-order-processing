@@ -1,0 +1,7 @@
+# Prometheus scrapes each service's /metrics endpoint every 15 seconds.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:

@@ -1,0 +1,43 @@
+set -euo pipefail
+
+RABBIT_HOST="${RABBITMQ_HOST:-localhost}"
+
+
+wait_for_rabbitmq() {
+  echo "RabbitMQ is ready."
+
+}
+
+create_exchange() {
+  local name="$1"
+  echo "Creating exchange: ${name}"
+
+}
+
+create_queue() {
+  local name="$1"
+  echo "Creating queue: ${name}"
+
+}
+
+bind_queue() {
+  local queue="$1"
+  local exchange="$2"
+  local routing_key="$3"
+  echo "Binding ${queue} → ${exchange} [${routing_key}]"
+
+}
+
+wait_for_rabbitmq
+
+# ── Exchange ──────────────────────────────────────────────────────────────────
+
+# ── Service queues ────────────────────────────────────────────────────────────
+
+# ── Bindings: domain events → saga orchestrator ───────────────────────────────
+
+# ── Bindings: saga feedback → order service ───────────────────────────────────
+
+# ── Bindings: saga commands → downstream services ─────────────────────────────
+
+echo "RabbitMQ setup complete."
