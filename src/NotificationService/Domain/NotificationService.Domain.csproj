@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>NotificationService.Domain</AssemblyName>
+    <RootNamespace>NotificationService.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ECommerceOrderProcessing.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

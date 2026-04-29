@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>PaymentService.Domain</AssemblyName>
+    <RootNamespace>PaymentService.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ECommerceOrderProcessing.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

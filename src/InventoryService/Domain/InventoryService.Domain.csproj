@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>InventoryService.Domain</AssemblyName>
+    <RootNamespace>InventoryService.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ECommerceOrderProcessing.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
