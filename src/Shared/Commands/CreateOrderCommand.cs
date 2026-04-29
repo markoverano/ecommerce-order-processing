@@ -24,4 +24,4 @@ public sealed record CreateOrderCommand : IRequest<ServiceResponse<OrderId>>
     }
 }
 
-public sealed record OrderItemRequest(ProductId ProductId, int Quantity);
+public sealed record OrderItemRequest(ProductId ProductId, int Quantity, Money UnitPrice);
