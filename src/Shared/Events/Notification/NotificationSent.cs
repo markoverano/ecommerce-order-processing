@@ -10,13 +10,22 @@ public sealed record NotificationSent : DomainEvent
     public OrderId OrderId { get; init; }
     public CustomerId CustomerId { get; init; }
     public string NotificationType { get; init; }
+    public string? ProviderMessageId { get; init; }
 
-    public NotificationSent(NotificationId notificationId, OrderId orderId, CustomerId customerId, string notificationType, int version, Guid correlationId)
+    public NotificationSent(
+        NotificationId notificationId,
+        OrderId orderId,
+        CustomerId customerId,
+        string notificationType,
+        string? providerMessageId,
+        int version,
+        Guid correlationId)
         : base(notificationId.Value, version, correlationId)
     {
         NotificationId = notificationId;
         OrderId = orderId;
         CustomerId = customerId;
         NotificationType = notificationType;
+        ProviderMessageId = providerMessageId;
     }
 }
