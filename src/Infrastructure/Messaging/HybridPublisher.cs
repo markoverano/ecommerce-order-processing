@@ -1,25 +1,30 @@
-using ECommerceOrderProcessing.Infrastructure.Messaging.AzureServiceBus;
-using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Shared.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerceOrderProcessing.Infrastructure.Messaging;
 
 /// <summary>
-/// Publishes to RabbitMQ first. On failure, falls back to Azure Service Bus.
-/// The 500ms timeout ensures fast fail so the outbox does not block on a dead broker.
+/// Publishes to the primary broker (RabbitMQ) first. If that fails or takes longer than 500 ms,
+/// falls back to Azure Service Bus. <see cref="BrokerHealthTracker"/> is updated on every transition
+/// so health checks can surface broker degradation independently of the publish path.
 /// </summary>
 public sealed class HybridPublisher : IEventPublisher
 {
-    private readonly RabbitMqPublisher _primary;
-    private readonly AzureServiceBusPublisher _fallback;
+    private readonly IEventPublisher _primary;
+    private readonly IEventPublisher _fallback;
+    private readonly BrokerHealthTracker _healthTracker;
     private readonly ILogger<HybridPublisher> _logger;
     private static readonly TimeSpan PrimaryTimeout = TimeSpan.FromMilliseconds(500);
 
-    public HybridPublisher(RabbitMqPublisher primary, AzureServiceBusPublisher fallback, ILogger<HybridPublisher> logger)
+    public HybridPublisher(
+        IEventPublisher primary,
+        IEventPublisher fallback,
+        BrokerHealthTracker healthTracker,
+        ILogger<HybridPublisher> logger)
     {
         _primary = primary;
         _fallback = fallback;
+        _healthTracker = healthTracker;
         _logger = logger;
     }
 
@@ -31,10 +36,12 @@ public sealed class HybridPublisher : IEventPublisher
         try
         {
             await _primary.PublishAsync(domainEvent, routingKey, cts.Token);
+            _healthTracker.RecordPrimarySuccess();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException { CancellationToken.IsCancellationRequested: true } oce || oce.CancellationToken != cancellationToken)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "RabbitMQ publish failed; switching to Azure Service Bus fallback for {EventType}", typeof(T).Name);
+            _logger.LogWarning(ex, "RabbitMQ publish failed for {EventType}; activating Azure Service Bus fallback", typeof(T).Name);
+            _healthTracker.RecordFallbackActivated();
             await _fallback.PublishAsync(domainEvent, routingKey, cancellationToken);
         }
     }
@@ -47,10 +54,12 @@ public sealed class HybridPublisher : IEventPublisher
         try
         {
             await _primary.PublishAsync(eventType, eventData, routingKey, cts.Token);
+            _healthTracker.RecordPrimarySuccess();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException { CancellationToken.IsCancellationRequested: true } oce || oce.CancellationToken != cancellationToken)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "RabbitMQ publish failed; switching to Azure Service Bus fallback for {EventType}", eventType);
+            _logger.LogWarning(ex, "RabbitMQ publish failed for {EventType}; activating Azure Service Bus fallback", eventType);
+            _healthTracker.RecordFallbackActivated();
             await _fallback.PublishAsync(eventType, eventData, routingKey, cancellationToken);
         }
     }
