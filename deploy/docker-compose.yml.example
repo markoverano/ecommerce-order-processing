@@ -25,3 +25,34 @@ services:
   # ── Services ─────────────────────────────────────────────────────────────────
   # Each service builds from the local Dockerfile. All env vars pull from .env.
   # Run `docker compose build` before `docker compose up` on first use.
+
+  # ── API Gateway ──────────────────────────────────────────────────────────────
+  kong:
+    image: kong:3.7
+    container_name: kong
+    networks: [ecommerce]
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes:
+      - ./kong/kong.yml:/etc/kong/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - order-service
+      - payment-service
+      - inventory-service
+      - shipping-service
+      - notification-service
+      - saga-orchestrator
