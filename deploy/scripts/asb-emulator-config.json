@@ -1,0 +1,73 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [],
+        "Topics": [
+          {
+            "Name": "order-events",
+            "Properties": {
+              "DefaultMessageTimeToLive": "P14D",
+              "MaxSizeInMegabytes": 1024,
+              "EnablePartitioning": false
+            },
+            "Subscriptions": [
+              {
+                "Name": "order-service",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              },
+              {
+                "Name": "payment-service",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              },
+              {
+                "Name": "inventory-service",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              },
+              {
+                "Name": "shipping-service",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              },
+              {
+                "Name": "notification-service",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              },
+              {
+                "Name": "saga-orchestrator",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "MaxDeliveryCount": 10,
+                  "LockDuration": "PT1M"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "Logging": {
+      "Type": "File"
+    }
+  }
+}
