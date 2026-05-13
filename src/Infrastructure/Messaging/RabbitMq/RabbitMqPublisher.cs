@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using ECommerceOrderProcessing.Shared.Domain;
@@ -45,6 +46,17 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
         {
             ["event-type"] = eventType
         };
+
+        // Propagate W3C trace context so consumers can create child spans linked to the publisher's trace.
+        var activity = Activity.Current;
+        if (activity is not null)
+        {
+            var flags = activity.ActivityTraceFlags.HasFlag(ActivityTraceFlags.Recorded) ? "01" : "00";
+            properties.Headers["traceparent"] = Encoding.UTF8.GetBytes(
+                $"00-{activity.TraceId}-{activity.SpanId}-{flags}");
+            if (!string.IsNullOrEmpty(activity.TraceStateString))
+                properties.Headers["tracestate"] = Encoding.UTF8.GetBytes(activity.TraceStateString);
+        }
 
         _channel.BasicPublish(
             exchange: ExchangeName,

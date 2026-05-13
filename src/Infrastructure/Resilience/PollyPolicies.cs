@@ -4,6 +4,7 @@ using Polly.CircuitBreaker;
 using Polly.Registry;
 using Polly.Timeout;
 using Polly.Wrap;
+using Prometheus;
 
 namespace ECommerceOrderProcessing.Infrastructure.Resilience;
 
@@ -18,7 +19,14 @@ public static class PollyPolicies
     public const string ExternalApiPolicyKey = "ExternalApi";
     public const string RetryOnlyPolicyKey = "RetryOnly";
 
-    public static void RegisterPolicies(IPolicyRegistry<string> registry, ILogger logger)
+    // 0 = Closed (healthy), 1 = Open (fast-failing), 2 = HalfOpen (probing)
+    private static readonly Gauge CircuitBreakerState = Metrics
+        .CreateGauge(
+            "circuit_breaker_state",
+            "Polly circuit breaker state: 0=Closed, 1=Open, 2=HalfOpen",
+            new GaugeConfiguration { LabelNames = ["service"] });
+
+    public static void RegisterPolicies(IPolicyRegistry<string> registry, ILogger logger, string serviceName = "unknown")
     {
         var timeout = Policy.TimeoutAsync(
             seconds: 10,
@@ -38,9 +46,20 @@ public static class PollyPolicies
                 exceptionsAllowedBeforeBreaking: 5,
                 durationOfBreak: TimeSpan.FromSeconds(30),
                 onBreak: (ex, duration) =>
-                    logger.LogError(ex, "Circuit breaker OPEN for {Duration}s", duration.TotalSeconds),
-                onReset: () => logger.LogInformation("Circuit breaker CLOSED"),
-                onHalfOpen: () => logger.LogInformation("Circuit breaker HALF-OPEN"));
+                {
+                    logger.LogError(ex, "Circuit breaker OPEN for {Duration}s", duration.TotalSeconds);
+                    CircuitBreakerState.WithLabels(serviceName).Set(1);
+                },
+                onReset: () =>
+                {
+                    logger.LogInformation("Circuit breaker CLOSED");
+                    CircuitBreakerState.WithLabels(serviceName).Set(0);
+                },
+                onHalfOpen: () =>
+                {
+                    logger.LogInformation("Circuit breaker HALF-OPEN");
+                    CircuitBreakerState.WithLabels(serviceName).Set(2);
+                });
 
         AsyncPolicyWrap externalApi = Policy.WrapAsync(retry, circuitBreaker, timeout);
         registry.Add(ExternalApiPolicyKey, externalApi);

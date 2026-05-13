@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +18,9 @@ public abstract class MessageConsumerBase : BackgroundService
     protected readonly ILogger Logger;
     private IModel? _channel;
     private const string ExchangeName = "order.events";
+
+    // Shared ActivitySource; registered via AddSource("ECommerce.Messaging") in each service's OpenTelemetry setup.
+    public static readonly ActivitySource MessagingActivitySource = new("ECommerce.Messaging", "1.0.0");
 
     protected abstract string QueueName { get; }
     protected abstract IReadOnlyList<string> RoutingKeys { get; }
@@ -46,15 +50,28 @@ public abstract class MessageConsumerBase : BackgroundService
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.Received += async (_, args) =>
         {
+            // Restore the publisher's trace context so this consumer span links to the originating trace.
+            ActivityContext parentContext = ExtractTraceContext(args.BasicProperties.Headers);
+
+            using var activity = MessagingActivitySource.StartActivity(
+                $"rabbitmq.consume {QueueName}",
+                ActivityKind.Consumer,
+                parentContext);
+
             try
             {
                 var body = Encoding.UTF8.GetString(args.Body.Span);
                 var eventType = args.BasicProperties.Type ?? string.Empty;
+                activity?.SetTag("messaging.system", "rabbitmq");
+                activity?.SetTag("messaging.destination", QueueName);
+                activity?.SetTag("messaging.operation", "receive");
+                activity?.SetTag("messaging.rabbitmq.routing_key", eventType);
                 await HandleMessageAsync(eventType, body, stoppingToken);
                 _channel.BasicAck(args.DeliveryTag, multiple: false);
             }
             catch (Exception ex)
             {
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 Logger.LogError(ex, "Unhandled error processing message from queue {Queue}", QueueName);
                 _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: false);
             }
@@ -62,6 +79,32 @@ public abstract class MessageConsumerBase : BackgroundService
 
         _channel.BasicConsume(QueueName, autoAck: false, consumer: consumer);
         return Task.CompletedTask;
+    }
+
+    private static ActivityContext ExtractTraceContext(IDictionary<string, object>? headers)
+    {
+        if (headers is null || !headers.TryGetValue("traceparent", out var traceparentObj))
+            return default;
+
+        var traceparent = traceparentObj is byte[] bytes
+            ? Encoding.UTF8.GetString(bytes)
+            : traceparentObj?.ToString();
+
+        if (string.IsNullOrEmpty(traceparent))
+            return default;
+
+        // Attempt to extract tracestate as well.
+        string? tracestate = null;
+        if (headers.TryGetValue("tracestate", out var tracestateObj))
+        {
+            tracestate = tracestateObj is byte[] tsBytes
+                ? Encoding.UTF8.GetString(tsBytes)
+                : tracestateObj?.ToString();
+        }
+
+        return ActivityContext.TryParse(traceparent, tracestate, isRemote: true, out var context)
+            ? context
+            : default;
     }
 
     protected abstract Task HandleMessageAsync(string eventType, string messageBody, CancellationToken cancellationToken);
