@@ -1,9 +1,13 @@
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using Microsoft.OpenApi.Models;
+using Serilog.Enrichers.OpenTelemetry;
+using ECommerceOrderProcessing.Infrastructure.Idempotency;
 using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Persistence;
+using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
@@ -13,6 +17,7 @@ using OrderService.Application.Commands;
 using OrderService.Application.Repositories;
 using OrderService.Application.Validation;
 using OrderService.Domain.Repositories;
+using OrderService.Infrastructure.Caching;
 using OrderService.Infrastructure.Messaging;
 using OrderService.Infrastructure.Persistence;
 using OrderService.Infrastructure.Repositories;
@@ -20,6 +25,7 @@ using Prometheus;
 using RabbitMQ.Client;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.Elasticsearch;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -31,12 +37,29 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog((ctx, services, cfg) => cfg
-        .ReadFrom.Configuration(ctx.Configuration)
-        .ReadFrom.Services(services)
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("ServiceName", "OrderService")
-        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {Message:lj}{NewLine}{Exception}"));
+    builder.Host.UseSerilog((ctx, services, cfg) =>
+    {
+        cfg.ReadFrom.Configuration(ctx.Configuration)
+           .ReadFrom.Services(services)
+           .Enrich.FromLogContext()
+           .Enrich.WithProperty("ServiceName", "OrderService")
+           .Enrich.WithOpenTelemetryTraceId()
+           .Enrich.WithOpenTelemetrySpanId()
+           .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {TraceId} {Message:lj}{NewLine}{Exception}");
+
+        var elasticUri = ctx.Configuration["Elasticsearch__Uri"];
+        if (!string.IsNullOrEmpty(elasticUri))
+        {
+            cfg.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
+            {
+                AutoRegisterTemplate = true,
+                IndexFormat = "ecommerce-order-{0:yyyy.MM.dd}",
+                BatchAction = ElasticOpType.Create,
+                FailureCallback = (_, ex) =>
+                    Console.Error.WriteLine($"Elasticsearch sink failed: {ex?.Message}")
+            });
+        }
+    });
 
     var config = builder.Configuration;
 
@@ -46,12 +69,28 @@ try
     builder.Services.AddScoped<DbContextBase>(sp => sp.GetRequiredService<OrderDbContext>());
     builder.Services.AddScoped<IEventStore, EfCoreEventStore>();
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
+    builder.Services.AddScoped<ISnapshotStore, EfCoreSnapshotStore>();
     builder.Services.AddScoped<IOrderRepository, EfCoreOrderRepository>();
-    builder.Services.AddScoped<IOrderReadRepository, EfCoreOrderReadRepository>();
+    builder.Services.AddScoped<EfCoreOrderReadRepository>();
+    builder.Services.AddScoped<IOrderReadRepository>(sp =>
+        new CachedOrderReadRepository(
+            sp.GetRequiredService<EfCoreOrderReadRepository>(),
+            sp.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<CachedOrderReadRepository>>()));
     builder.Services.AddScoped<CreateOrderCommandValidator>();
 
+    builder.Services.AddStackExchangeRedisCache(opts =>
+    {
+        opts.Configuration = config["Redis__ConnectionString"] ?? "localhost:6379";
+        opts.InstanceName = "order-service:";
+    });
+    builder.Services.AddScoped<IGlobalIdempotencyStore, RedisGlobalIdempotencyStore>();
+
     builder.Services.AddMediatR(cfg =>
-        cfg.RegisterServicesFromAssemblyContaining<CreateOrderCommandHandler>());
+    {
+        cfg.RegisterServicesFromAssemblyContaining<CreateOrderCommandHandler>();
+        cfg.AddOpenBehavior(typeof(GlobalIdempotencyBehavior<,>));
+    });
 
     builder.Services.AddSingleton<IConnection>(_ =>
     {
@@ -76,19 +115,50 @@ try
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .AddJaegerExporter(opts =>
-            {
-                opts.AgentHost = config["Jaeger__Host"] ?? "localhost";
-                opts.AgentPort = int.TryParse(config["Jaeger__Port"], out var p) ? p : 6831;
-            }));
+            .AddSource(MessageConsumerBase.MessagingActivitySource.Name)
+            .AddOtlpExporter(opts =>
+                opts.Endpoint = new Uri(config["Jaeger__Endpoint"] ?? "http://localhost:4317")));
 
     builder.Services.AddHealthChecks()
-        .AddNpgSql(config.GetConnectionString("OrdersDb") ?? config["DB_CONNECTION_STRING"] ?? string.Empty, name: "postgres");
+        .AddNpgSql(config.GetConnectionString("OrdersDb") ?? config["DB_CONNECTION_STRING"] ?? string.Empty, name: "postgres")
+        .AddRedis(config["Redis__ConnectionString"] ?? "localhost:6379", name: "redis");
 
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(opts =>
-        opts.SwaggerDoc("v1", new() { Title = "Order Service", Version = "v1" }));
+    {
+        opts.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "Order Service",
+            Version = "v1",
+            Description = "Manages order lifecycle. Publishes OrderCreated to trigger the saga orchestrator."
+        });
+
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, "OrderService.Api.xml");
+        if (File.Exists(xmlPath))
+            opts.IncludeXmlComments(xmlPath);
+
+        opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "JWT Bearer token issued by Kong API Gateway."
+        });
+
+        opts.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                },
+                Array.Empty<string>()
+            }
+        });
+    });
 
     var app = builder.Build();
 
@@ -128,3 +198,5 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+public partial class Program;

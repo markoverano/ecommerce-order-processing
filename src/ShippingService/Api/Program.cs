@@ -1,4 +1,6 @@
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using Microsoft.OpenApi.Models;
+using Serilog.Enrichers.OpenTelemetry;
 using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
@@ -14,6 +16,7 @@ using Prometheus;
 using RabbitMQ.Client;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.Elasticsearch;
 using ShippingService.Application.Commands;
 using ShippingService.Application.ExternalClients;
 using ShippingService.Application.Repositories;
@@ -36,12 +39,29 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog((ctx, services, cfg) => cfg
-        .ReadFrom.Configuration(ctx.Configuration)
-        .ReadFrom.Services(services)
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("ServiceName", "ShippingService")
-        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {Message:lj}{NewLine}{Exception}"));
+    builder.Host.UseSerilog((ctx, services, cfg) =>
+    {
+        cfg.ReadFrom.Configuration(ctx.Configuration)
+           .ReadFrom.Services(services)
+           .Enrich.FromLogContext()
+           .Enrich.WithProperty("ServiceName", "ShippingService")
+           .Enrich.WithOpenTelemetryTraceId()
+           .Enrich.WithOpenTelemetrySpanId()
+           .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {TraceId} {Message:lj}{NewLine}{Exception}");
+
+        var elasticUri = ctx.Configuration["Elasticsearch__Uri"];
+        if (!string.IsNullOrEmpty(elasticUri))
+        {
+            cfg.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
+            {
+                AutoRegisterTemplate = true,
+                IndexFormat = "ecommerce-shipping-{0:yyyy.MM.dd}",
+                BatchAction = ElasticOpType.Create,
+                FailureCallback = (_, ex) =>
+                    Console.Error.WriteLine($"Elasticsearch sink failed: {ex?.Message}")
+            });
+        }
+    });
 
     var config = builder.Configuration;
 
@@ -58,7 +78,7 @@ try
     builder.Services.AddScoped<FedExWebhookHandler>();
 
     var policyRegistry = new PolicyRegistry();
-    PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+    PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "shipping-service");
     builder.Services.AddSingleton<IReadOnlyPolicyRegistry<string>>(policyRegistry);
     builder.Services.AddSingleton<IPolicyRegistry<string>>(policyRegistry);
 
@@ -95,11 +115,9 @@ try
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .AddJaegerExporter(opts =>
-            {
-                opts.AgentHost = config["Jaeger__Host"] ?? "localhost";
-                opts.AgentPort = int.TryParse(config["Jaeger__Port"], out var p) ? p : 6831;
-            }));
+            .AddSource(MessageConsumerBase.MessagingActivitySource.Name)
+            .AddOtlpExporter(opts =>
+                opts.Endpoint = new Uri(config["Jaeger__Endpoint"] ?? "http://localhost:4317")));
 
     builder.Services.AddHealthChecks()
         .AddNpgSql(config.GetConnectionString("ShippingDb") ?? config["DB_CONNECTION_STRING"] ?? string.Empty, name: "postgres");
@@ -107,7 +125,39 @@ try
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(opts =>
-        opts.SwaggerDoc("v1", new() { Title = "Shipping Service", Version = "v1" }));
+    {
+        opts.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "Shipping Service",
+            Version = "v1",
+            Description = "Creates and cancels FedEx shipments. Receives webhook delivery updates from FedEx via HMAC-verified POST."
+        });
+
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, "ShippingService.Api.xml");
+        if (File.Exists(xmlPath))
+            opts.IncludeXmlComments(xmlPath);
+
+        opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "JWT Bearer token issued by Kong API Gateway."
+        });
+
+        opts.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                },
+                Array.Empty<string>()
+            }
+        });
+    });
 
     var app = builder.Build();
 
@@ -146,3 +196,5 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+public partial class Program;

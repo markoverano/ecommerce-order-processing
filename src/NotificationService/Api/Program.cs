@@ -1,4 +1,6 @@
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using Microsoft.OpenApi.Models;
+using Serilog.Enrichers.OpenTelemetry;
 using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
@@ -7,8 +9,11 @@ using ECommerceOrderProcessing.Infrastructure.Persistence;
 using ECommerceOrderProcessing.Infrastructure.Resilience;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using NotificationService.Api.Hubs;
+using NotificationService.Api.Notifications;
 using NotificationService.Application.Commands;
 using NotificationService.Application.ExternalClients;
+using NotificationService.Application.Notifications;
 using NotificationService.Application.Repositories;
 using NotificationService.Application.Validation;
 using NotificationService.Application.Webhooks;
@@ -25,6 +30,7 @@ using Prometheus;
 using RabbitMQ.Client;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.Elasticsearch;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -36,12 +42,29 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog((ctx, services, cfg) => cfg
-        .ReadFrom.Configuration(ctx.Configuration)
-        .ReadFrom.Services(services)
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("ServiceName", "NotificationService")
-        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {Message:lj}{NewLine}{Exception}"));
+    builder.Host.UseSerilog((ctx, services, cfg) =>
+    {
+        cfg.ReadFrom.Configuration(ctx.Configuration)
+           .ReadFrom.Services(services)
+           .Enrich.FromLogContext()
+           .Enrich.WithProperty("ServiceName", "NotificationService")
+           .Enrich.WithOpenTelemetryTraceId()
+           .Enrich.WithOpenTelemetrySpanId()
+           .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ServiceName}] {TraceId} {Message:lj}{NewLine}{Exception}");
+
+        var elasticUri = ctx.Configuration["Elasticsearch__Uri"];
+        if (!string.IsNullOrEmpty(elasticUri))
+        {
+            cfg.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
+            {
+                AutoRegisterTemplate = true,
+                IndexFormat = "ecommerce-notification-{0:yyyy.MM.dd}",
+                BatchAction = ElasticOpType.Create,
+                FailureCallback = (_, ex) =>
+                    Console.Error.WriteLine($"Elasticsearch sink failed: {ex?.Message}")
+            });
+        }
+    });
 
     var config = builder.Configuration;
 
@@ -59,7 +82,7 @@ try
     builder.Services.AddScoped<TwilioWebhookHandler>();
 
     var policyRegistry = new PolicyRegistry();
-    PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+    PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "notification-service");
     builder.Services.AddSingleton<IReadOnlyPolicyRegistry<string>>(policyRegistry);
     builder.Services.AddSingleton<IPolicyRegistry<string>>(policyRegistry);
 
@@ -99,19 +122,64 @@ try
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .AddJaegerExporter(opts =>
-            {
-                opts.AgentHost = config["Jaeger__Host"] ?? "localhost";
-                opts.AgentPort = int.TryParse(config["Jaeger__Port"], out var p) ? p : 6831;
-            }));
+            .AddSource(MessageConsumerBase.MessagingActivitySource.Name)
+            .AddOtlpExporter(opts =>
+                opts.Endpoint = new Uri(config["Jaeger__Endpoint"] ?? "http://localhost:4317")));
 
     builder.Services.AddHealthChecks()
         .AddNpgSql(config.GetConnectionString("NotificationsDb") ?? config["DB_CONNECTION_STRING"] ?? string.Empty, name: "postgres");
 
+    var redisConnection = config["Redis__ConnectionString"] ?? "localhost:6379";
+    builder.Services.AddSignalR()
+        .AddStackExchangeRedis(redisConnection, opts =>
+        {
+            opts.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("notification-signalr");
+        });
+    builder.Services.AddScoped<IOrderStatusNotifier, OrderStatusNotifier>();
+
+    builder.Services.AddCors(opts =>
+        opts.AddPolicy("SignalRDev", policy =>
+            policy.WithOrigins(config["SignalR__AllowedOrigins"] ?? "http://localhost:3000")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials()));
+
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(opts =>
-        opts.SwaggerDoc("v1", new() { Title = "Notification Service", Version = "v1" }));
+    {
+        opts.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "Notification Service",
+            Version = "v1",
+            Description = "Sends transactional email (Mailgun) and SMS (Twilio) notifications. Receives delivery webhooks from both providers."
+        });
+
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, "NotificationService.Api.xml");
+        if (File.Exists(xmlPath))
+            opts.IncludeXmlComments(xmlPath);
+
+        opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "JWT Bearer token issued by Kong API Gateway."
+        });
+
+        opts.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                },
+                Array.Empty<string>()
+            }
+        });
+    });
 
     var app = builder.Build();
 
@@ -127,9 +195,11 @@ try
     app.UseMiddleware<LoggingMiddleware>();
 
     app.UseRouting();
+    app.UseCors("SignalRDev");
     app.UseHttpMetrics();
 
     app.MapControllers();
+    app.MapHub<OrderStatusHub>("/hubs/order-status").RequireCors("SignalRDev");
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
     app.MapHealthChecks("/health/ready");
     app.MapMetrics("/metrics");
@@ -150,3 +220,5 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+public partial class Program;
