@@ -37,7 +37,9 @@ public sealed class MailgunNotificationClient : IMailgunNotificationClient
 
         var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"api:{apiKey}"));
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-        _httpClient.BaseAddress = new Uri($"https://api.mailgun.net/v3/{domain}/");
+        // Mailgun__BaseUrl is overridden in test environments to redirect calls to a WireMock stub.
+        var baseUrl = configuration["Mailgun__BaseUrl"] ?? $"https://api.mailgun.net/v3/{domain}/";
+        _httpClient.BaseAddress = new Uri(baseUrl);
     }
 
     public async Task<MailgunSendResult> SendEmailAsync(

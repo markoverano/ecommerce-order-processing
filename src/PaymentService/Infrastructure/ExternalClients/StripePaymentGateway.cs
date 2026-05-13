@@ -27,7 +27,11 @@ public sealed class StripePaymentGateway : IStripePaymentGateway
         var apiKey = configuration["Stripe__ApiKey"]
             ?? throw new InvalidOperationException("Stripe__ApiKey is not configured.");
 
-        var client = new StripeClient(apiKey);
+        // Stripe__BaseUrl is non-null only in test environments where WireMock stubs the Stripe API.
+        var apiBase = configuration["Stripe__BaseUrl"];
+        var client = string.IsNullOrEmpty(apiBase)
+            ? new StripeClient(apiKey)
+            : new StripeClient(apiKey, apiBase: apiBase);
         _chargeService = new ChargeService(client);
         _refundService = new RefundService(client);
         _policy = registry.Get<IAsyncPolicy>(PollyPolicies.ExternalApiPolicyKey);
