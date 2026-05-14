@@ -3,6 +3,7 @@ using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using OrderService.Application.Metrics;
 using OrderService.Application.Validation;
 using OrderService.Domain.Aggregates;
 using OrderService.Domain.Repositories;
@@ -31,6 +32,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         if (!validation.IsValid)
         {
             var errors = string.Join("; ", validation.Errors.Select(e => e.ErrorMessage));
+            OrderMetrics.OrderCreationFailed.Inc();
             return ServiceResponse<OrderId>.Failure("VALIDATION_FAILED", errors);
         }
 
@@ -42,6 +44,8 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         var order = Order.Create(command.CustomerId, items, command.ShippingAddress, command.CorrelationId);
 
         await _repository.SaveAsync(order, cancellationToken);
+
+        OrderMetrics.OrdersCreated.Inc();
 
         _logger.LogInformation(
             "Order {OrderId} created for customer {CustomerId} with {ItemCount} items. CorrelationId={CorrelationId}",

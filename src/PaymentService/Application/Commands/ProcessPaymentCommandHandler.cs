@@ -4,6 +4,7 @@ using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PaymentService.Application.ExternalClients;
+using PaymentService.Application.Metrics;
 using PaymentService.Application.Validation;
 using PaymentService.Domain.Aggregates;
 using PaymentService.Domain.Exceptions;
@@ -58,6 +59,11 @@ public sealed class ProcessPaymentCommandHandler : IRequestHandler<ProcessPaymen
         }
 
         await _repository.SaveAsync(payment, cancellationToken);
+
+        if (payment.Status == PaymentService.Domain.Enums.PaymentStatus.Processed)
+            PaymentMetrics.PaymentsProcessed.Inc();
+        else
+            PaymentMetrics.PaymentsFailed.Inc();
 
         _logger.LogInformation(
             "Payment {PaymentId} for order {OrderId} completed with status {Status}. CorrelationId={CorrelationId}",

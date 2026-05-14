@@ -1,9 +1,12 @@
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
+using ECommerceOrderProcessing.Shared.SignalR;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using NotificationService.Application.ExternalClients;
+using NotificationService.Application.Metrics;
+using NotificationService.Application.Notifications;
 using NotificationService.Application.Validation;
 using NotificationService.Domain.Aggregates;
 using NotificationService.Domain.Exceptions;
@@ -17,6 +20,7 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
     private readonly IMailgunNotificationClient _mailgun;
     private readonly ITwilioNotificationClient _twilio;
     private readonly NotifyCustomerCommandValidator _validator;
+    private readonly IOrderStatusNotifier _notifier;
     private readonly ILogger<NotifyCustomerCommandHandler> _logger;
 
     public NotifyCustomerCommandHandler(
@@ -24,12 +28,14 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
         IMailgunNotificationClient mailgun,
         ITwilioNotificationClient twilio,
         NotifyCustomerCommandValidator validator,
+        IOrderStatusNotifier notifier,
         ILogger<NotifyCustomerCommandHandler> logger)
     {
         _repository = repository;
         _mailgun = mailgun;
         _twilio = twilio;
         _validator = validator;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -92,6 +98,18 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
         }
 
         await _repository.SaveAsync(notification, cancellationToken);
+
+        await _notifier.NotifyAsync(new OrderStatusUpdate(
+            command.OrderId.Value,
+            "NotificationPending",
+            notification.Status.ToString(),
+            DateTimeOffset.UtcNow,
+            command.CorrelationId), cancellationToken);
+
+        if (notification.Status == NotificationService.Domain.Enums.NotificationStatus.Sent)
+            NotificationMetrics.NotificationsSent.WithLabels(channel).Inc();
+        else
+            NotificationMetrics.NotificationsFailed.WithLabels(channel).Inc();
 
         _logger.LogInformation(
             "Notification {NotificationId} for order {OrderId} completed with status {Status}. CorrelationId={CorrelationId}",

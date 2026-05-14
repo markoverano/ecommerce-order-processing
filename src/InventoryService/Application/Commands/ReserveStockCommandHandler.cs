@@ -1,6 +1,7 @@
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
+using InventoryService.Application.Metrics;
 using InventoryService.Application.Validation;
 using InventoryService.Domain.Aggregates;
 using InventoryService.Domain.Exceptions;
@@ -74,6 +75,8 @@ public sealed class ReserveStockCommandHandler : IRequestHandler<ReserveStockCom
 
             await _reservationRepository.SaveAsync(failedReservation, Array.Empty<Product>(), cancellationToken);
 
+            InventoryMetrics.StockReservationsFailed.Inc();
+
             _logger.LogWarning(
                 "Stock unavailable for order {OrderId}: product {ProductId} has {Available}, requested {Requested}. CorrelationId={CorrelationId}",
                 command.OrderId, unavailableItem.ProductId, availableQty, unavailableItem.Quantity, command.CorrelationId);
@@ -93,6 +96,8 @@ public sealed class ReserveStockCommandHandler : IRequestHandler<ReserveStockCom
 
         var reservation = StockReservation.Create(command.OrderId, command.Items, command.CorrelationId);
         await _reservationRepository.SaveAsync(reservation, modifiedProducts, cancellationToken);
+
+        InventoryMetrics.StockReservationsSucceeded.Inc();
 
         _logger.LogInformation(
             "Reserved stock for order {OrderId}, reservation {ReservationId}. CorrelationId={CorrelationId}",

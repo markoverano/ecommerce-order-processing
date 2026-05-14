@@ -3,6 +3,7 @@ using ECommerceOrderProcessing.Shared.Models;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using ShippingService.Application.ExternalClients;
+using ShippingService.Application.Metrics;
 using ShippingService.Domain.Enums;
 using ShippingService.Domain.Repositories;
 
@@ -43,6 +44,8 @@ public sealed class CancelShipmentCommandHandler : IRequestHandler<CancelShipmen
 
         shipment.Cancel(command.CorrelationId);
         await _repository.SaveAsync(shipment, cancellationToken);
+
+        ShippingMetrics.ShipmentsCancelled.Inc();
 
         _logger.LogInformation(
             "Shipment {ShipmentId} for order {OrderId} cancelled. CorrelationId={CorrelationId}",

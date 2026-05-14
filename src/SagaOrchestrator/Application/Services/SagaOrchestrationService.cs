@@ -7,6 +7,7 @@ using ECommerceOrderProcessing.Shared.Events.Shipping;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using Microsoft.Extensions.Logging;
+using SagaOrchestrator.Application.Metrics;
 using SagaOrchestrator.Domain.Aggregates;
 using SagaOrchestrator.Domain.Enums;
 using SagaOrchestrator.Domain.Exceptions;
@@ -41,6 +42,8 @@ public sealed class SagaOrchestrationService
             evt.CorrelationId);
 
         await _repository.SaveAsync(saga, cancellationToken);
+
+        SagaMetrics.SagasStarted.Inc();
 
         // Payment method ID is not carried on OrderCreated; downstream payment service resolves it from customer profile.
         await _commandPublisher.PublishProcessPaymentAsync(
@@ -79,6 +82,8 @@ public sealed class SagaOrchestrationService
 
         saga.OnPaymentFailed(evt.Reason, evt.CorrelationId);
         await _repository.SaveAsync(saga, cancellationToken);
+
+        SagaMetrics.SagasCompensated.WithLabels("payment_failed").Inc();
 
         _logger.LogWarning(
             "Saga {SagaId}: payment failed ({Reason}). Saga compensated without further actions. CorrelationId={CorrelationId}",
@@ -203,6 +208,8 @@ public sealed class SagaOrchestrationService
         saga.OnPaymentRefunded(evt.CorrelationId);
         await _repository.SaveAsync(saga, cancellationToken);
 
+        SagaMetrics.SagasCompensated.WithLabels(saga.CompensationReason ?? "unknown").Inc();
+
         _logger.LogInformation(
             "Saga {SagaId}: payment refunded. Saga fully compensated. CorrelationId={CorrelationId}",
             saga.Id, evt.CorrelationId);
@@ -214,6 +221,8 @@ public sealed class SagaOrchestrationService
 
         saga.OnNotificationSent(evt.CorrelationId);
         await _repository.SaveAsync(saga, cancellationToken);
+
+        SagaMetrics.SagasCompleted.Inc();
 
         _logger.LogInformation(
             "Saga {SagaId}: notification sent. Saga completed successfully. CorrelationId={CorrelationId}",

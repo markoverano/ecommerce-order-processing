@@ -1,5 +1,6 @@
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
+using InventoryService.Application.Metrics;
 using InventoryService.Domain.Repositories;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -46,6 +47,8 @@ public sealed class ReleaseStockCommandHandler : IRequestHandler<ReleaseStockCom
 
         reservation.Release(command.CorrelationId);
         await _reservationRepository.SaveAsync(reservation, modifiedProducts, cancellationToken);
+
+        InventoryMetrics.StockReleases.Inc();
 
         _logger.LogInformation(
             "Released reservation {ReservationId} for order {OrderId}. CorrelationId={CorrelationId}",

@@ -4,6 +4,7 @@ using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using ShippingService.Application.ExternalClients;
+using ShippingService.Application.Metrics;
 using ShippingService.Application.Validation;
 using ShippingService.Domain.Aggregates;
 using ShippingService.Domain.Exceptions;
@@ -63,6 +64,11 @@ public sealed class CreateShipmentCommandHandler : IRequestHandler<CreateShipmen
         }
 
         await _repository.SaveAsync(shipment, cancellationToken);
+
+        if (shipment.Status == ShippingService.Domain.Enums.ShipmentStatus.Created)
+            ShippingMetrics.ShipmentsCreated.Inc();
+        else
+            ShippingMetrics.ShipmentsFailed.Inc();
 
         _logger.LogInformation(
             "Shipment {ShipmentId} for order {OrderId} completed with status {Status}. CorrelationId={CorrelationId}",

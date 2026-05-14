@@ -3,6 +3,7 @@ using ECommerceOrderProcessing.Shared.Models;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PaymentService.Application.ExternalClients;
+using PaymentService.Application.Metrics;
 using PaymentService.Domain.Exceptions;
 using PaymentService.Domain.Repositories;
 
@@ -48,6 +49,8 @@ public sealed class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentC
 
         payment.MarkAsRefunded(command.Amount, command.CorrelationId);
         await _repository.SaveAsync(payment, cancellationToken);
+
+        PaymentMetrics.PaymentsRefunded.Inc();
 
         _logger.LogInformation(
             "Payment {PaymentId} for order {OrderId} refunded. CorrelationId={CorrelationId}",
