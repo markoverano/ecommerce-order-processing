@@ -1,11 +1,12 @@
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceOrderProcessing.Infrastructure.Persistence;
 
 /// <summary>
 /// Shared EF Core base that every service DbContext inherits from.
-/// Provides the events and outbox tables required by the event-sourcing and outbox patterns.
+/// Provides the events, outbox, and snapshots tables required by the event-sourcing, outbox, and snapshot patterns.
 /// </summary>
 public abstract class DbContextBase : DbContext
 {
@@ -13,12 +14,14 @@ public abstract class DbContextBase : DbContext
 
     public DbSet<StoredEvent> Events => Set<StoredEvent>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<AggregateSnapshot> Snapshots => Set<AggregateSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         ConfigureEvents(modelBuilder);
         ConfigureOutbox(modelBuilder);
+        ConfigureSnapshots(modelBuilder);
     }
 
     private static void ConfigureEvents(ModelBuilder modelBuilder)
@@ -51,6 +54,22 @@ public abstract class DbContextBase : DbContext
             e.Property(x => x.RoutingKey).HasColumnName("routing_key").HasMaxLength(200);
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.PublishedAt).HasColumnName("published_at");
+        });
+    }
+
+    private static void ConfigureSnapshots(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AggregateSnapshot>(e =>
+        {
+            e.ToTable("snapshots");
+            e.HasKey(x => x.SnapshotId);
+            e.Property(x => x.SnapshotId).HasColumnName("snapshot_id").UseIdentityAlwaysColumn();
+            e.Property(x => x.AggregateId).HasColumnName("aggregate_id");
+            e.Property(x => x.AggregateType).HasColumnName("aggregate_type").HasMaxLength(200);
+            e.Property(x => x.SnapshotData).HasColumnName("snapshot_data").HasColumnType("jsonb");
+            e.Property(x => x.Version).HasColumnName("version");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.HasIndex(x => new { x.AggregateId, x.Version }).HasDatabaseName("ix_snapshots_aggregate_version");
         });
     }
 }
