@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Inventory Service to release a reservation during saga compensation.</summary>
-public sealed record ReleaseStockCommand : IRequest<ServiceResponse<bool>>
+public sealed record ReleaseStockCommand : IRequest<ServiceResponse<bool>>, IIdempotentCommand
 {
     public ReservationId ReservationId { get; init; }
     public OrderId OrderId { get; init; }
@@ -17,4 +17,6 @@ public sealed record ReleaseStockCommand : IRequest<ServiceResponse<bool>>
         OrderId = orderId;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }

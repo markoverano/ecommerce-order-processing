@@ -6,7 +6,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Initiates a new order. Handled by Order Service.</summary>
-public sealed record CreateOrderCommand : IRequest<ServiceResponse<OrderId>>
+public sealed record CreateOrderCommand : IRequest<ServiceResponse<OrderId>>, IIdempotentCommand
 {
     public CustomerId CustomerId { get; init; }
     public IReadOnlyList<OrderItemRequest> Items { get; init; }
@@ -22,6 +22,8 @@ public sealed record CreateOrderCommand : IRequest<ServiceResponse<OrderId>>
         IdempotencyKey = idempotencyKey;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => IdempotencyKey.Value;
 }
 
 public sealed record OrderItemRequest(ProductId ProductId, int Quantity, Money UnitPrice);

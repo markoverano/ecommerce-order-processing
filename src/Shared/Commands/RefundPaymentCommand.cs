@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Payment Service to issue a Stripe refund. Sent by the Saga Orchestrator during compensation.</summary>
-public sealed record RefundPaymentCommand : IRequest<ServiceResponse<bool>>
+public sealed record RefundPaymentCommand : IRequest<ServiceResponse<bool>>, IIdempotentCommand
 {
     public PaymentId PaymentId { get; init; }
     public OrderId OrderId { get; init; }
@@ -21,4 +21,6 @@ public sealed record RefundPaymentCommand : IRequest<ServiceResponse<bool>>
         Reason = reason;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }

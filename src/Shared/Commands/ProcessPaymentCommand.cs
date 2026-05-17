@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Payment Service to charge the customer via Stripe. Sent by the Saga Orchestrator.</summary>
-public sealed record ProcessPaymentCommand : IRequest<ServiceResponse<PaymentId>>
+public sealed record ProcessPaymentCommand : IRequest<ServiceResponse<PaymentId>>, IIdempotentCommand
 {
     public OrderId OrderId { get; init; }
     public CustomerId CustomerId { get; init; }
@@ -21,4 +21,6 @@ public sealed record ProcessPaymentCommand : IRequest<ServiceResponse<PaymentId>
         PaymentMethodId = paymentMethodId;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }

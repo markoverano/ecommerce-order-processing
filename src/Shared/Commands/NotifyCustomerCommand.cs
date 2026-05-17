@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Notification Service to send a customer notification. Sent by the Saga Orchestrator after shipment is created.</summary>
-public sealed record NotifyCustomerCommand : IRequest<ServiceResponse<NotificationId>>
+public sealed record NotifyCustomerCommand : IRequest<ServiceResponse<NotificationId>>, IIdempotentCommand
 {
     public OrderId OrderId { get; init; }
     public CustomerId CustomerId { get; init; }
@@ -21,4 +21,6 @@ public sealed record NotifyCustomerCommand : IRequest<ServiceResponse<Notificati
         TemplateData = templateData;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }

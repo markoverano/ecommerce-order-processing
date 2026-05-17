@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Shipping Service to book a FedEx shipment. Sent by the Saga Orchestrator after stock is reserved.</summary>
-public sealed record CreateShipmentCommand : IRequest<ServiceResponse<ShipmentId>>
+public sealed record CreateShipmentCommand : IRequest<ServiceResponse<ShipmentId>>, IIdempotentCommand
 {
     public OrderId OrderId { get; init; }
     public CustomerId CustomerId { get; init; }
@@ -21,6 +21,8 @@ public sealed record CreateShipmentCommand : IRequest<ServiceResponse<ShipmentId
         Items = items;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }
 
 public sealed record ShipmentItem(ProductId ProductId, int Quantity, string Description);

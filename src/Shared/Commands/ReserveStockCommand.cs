@@ -5,7 +5,7 @@ using MediatR;
 namespace ECommerceOrderProcessing.Shared.Commands;
 
 /// <summary>Instructs Inventory Service to hold stock for an order. Sent by the Saga Orchestrator after payment succeeds.</summary>
-public sealed record ReserveStockCommand : IRequest<ServiceResponse<ReservationId>>
+public sealed record ReserveStockCommand : IRequest<ServiceResponse<ReservationId>>, IIdempotentCommand
 {
     public OrderId OrderId { get; init; }
     public IReadOnlyList<StockReservationItem> Items { get; init; }
@@ -17,6 +17,8 @@ public sealed record ReserveStockCommand : IRequest<ServiceResponse<ReservationI
         Items = items;
         CorrelationId = correlationId;
     }
+
+    string IIdempotentCommand.GetIdempotencyKey() => CorrelationId.ToString();
 }
 
 public sealed record StockReservationItem(ProductId ProductId, int Quantity);
