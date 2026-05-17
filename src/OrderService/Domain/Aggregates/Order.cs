@@ -63,6 +63,35 @@ public sealed class Order : AggregateRoot
         RaiseEvent(new OrderCompensated(OrderId, Version + 1, reason, correlationId));
     }
 
+    // Reconstructs aggregate state from a snapshot and any events recorded after it, without raising uncommitted events.
+    public static Order FromSnapshot(
+        Guid orderId,
+        CustomerId customerId,
+        IReadOnlyList<OrderItemData> itemData,
+        Money totalAmount,
+        ShippingAddress shippingAddress,
+        OrderStatus status,
+        int snapshotVersion,
+        IReadOnlyList<DomainEvent> eventsSinceSnapshot)
+    {
+        var order = new Order();
+        order.Id = orderId;
+        order.CustomerId = customerId;
+        order._items.AddRange(itemData.Select(i => OrderItem.Create(i.ProductId, i.Quantity, i.UnitPrice)));
+        order.TotalAmount = totalAmount;
+        order.ShippingAddress = shippingAddress;
+        order.Status = status;
+        order.Version = snapshotVersion;
+
+        foreach (var evt in eventsSinceSnapshot)
+        {
+            order.Apply(evt);
+            order.Version++;
+        }
+
+        return order;
+    }
+
     // Reconstructs aggregate state from a persisted event stream without raising new uncommitted events.
     public static Order Rehydrate(IReadOnlyList<DomainEvent> events)
     {
