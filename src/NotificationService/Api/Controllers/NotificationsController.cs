@@ -48,4 +48,19 @@ public sealed class NotificationsController : ControllerBase
 
         return Ok(result.Data);
     }
+
+    /// <summary>Returns the hub connection info for the given order so the browser client can subscribe to real-time updates.</summary>
+    [HttpGet("token")]
+    public IActionResult GetConnectionToken([FromQuery] Guid orderId)
+    {
+        if (orderId == Guid.Empty)
+            return BadRequest(new { code = "INVALID_ORDER_ID", message = "orderId query parameter is required." });
+
+        return Ok(new
+        {
+            hubUrl = "/hubs/order-status",
+            orderId,
+            method = "ReceiveOrderUpdate"
+        });
+    }
 }
