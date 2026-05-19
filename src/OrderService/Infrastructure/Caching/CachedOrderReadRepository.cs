@@ -60,6 +60,6 @@ public sealed class CachedOrderReadRepository : IOrderReadRepository
         return dto;
     }
 
-    public Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default)
-        => _inner.GetAllAsync(page, pageSize, cancellationToken);
+    public Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, Guid? customerId = null, CancellationToken cancellationToken = default)
+        => _inner.GetAllAsync(page, pageSize, customerId, cancellationToken);
 }

@@ -1,3 +1,4 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
@@ -14,15 +15,18 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
 {
     private readonly IOrderRepository _repository;
     private readonly CreateOrderCommandValidator _validator;
+    private readonly ICurrentUserAccessor _currentUserAccessor;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
         IOrderRepository repository,
         CreateOrderCommandValidator validator,
+        ICurrentUserAccessor currentUserAccessor,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _repository = repository;
         _validator = validator;
+        _currentUserAccessor = currentUserAccessor;
         _logger = logger;
     }
 
@@ -36,12 +40,16 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
             return ServiceResponse<OrderId>.Failure("VALIDATION_FAILED", errors);
         }
 
+        // The [Authorize] attribute guarantees this is non-null on any reachable code path.
+        var user = _currentUserAccessor.GetCurrentUser()
+            ?? throw new InvalidOperationException("Authenticated user context is missing from an authorized endpoint.");
+
         var items = command.Items
             .Select(i => new OrderItemData(i.ProductId, i.Quantity, i.UnitPrice))
             .ToList()
             .AsReadOnly();
 
-        var order = Order.Create(command.CustomerId, items, command.ShippingAddress, command.CorrelationId);
+        var order = Order.Create(user.UserId, items, command.ShippingAddress, command.CorrelationId);
 
         await _repository.SaveAsync(order, cancellationToken);
 
@@ -49,7 +57,7 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
 
         _logger.LogInformation(
             "Order {OrderId} created for customer {CustomerId} with {ItemCount} items. CorrelationId={CorrelationId}",
-            order.OrderId, command.CustomerId.Value, items.Count, command.CorrelationId);
+            order.OrderId, user.UserId.Value, items.Count, command.CorrelationId);
 
         return ServiceResponse<OrderId>.Success(order.OrderId);
     }

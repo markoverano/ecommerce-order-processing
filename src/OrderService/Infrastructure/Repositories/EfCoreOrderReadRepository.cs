@@ -30,12 +30,15 @@ public sealed class EfCoreOrderReadRepository : IOrderReadRepository
         return model is null ? null : MapToDto(model);
     }
 
-    public async Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, Guid? customerId = null, CancellationToken cancellationToken = default)
     {
-        var totalCount = await _db.OrderViewModels.CountAsync(cancellationToken);
+        var query = _db.OrderViewModels.AsNoTracking();
+        if (customerId.HasValue)
+            query = query.Where(x => x.CustomerId == customerId.Value);
 
-        var items = await _db.OrderViewModels
-            .AsNoTracking()
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
             .OrderByDescending(x => x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

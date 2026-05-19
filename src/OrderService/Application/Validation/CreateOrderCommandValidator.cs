@@ -7,7 +7,6 @@ public sealed class CreateOrderCommandValidator : AbstractValidator<CreateOrderC
 {
     public CreateOrderCommandValidator()
     {
-        RuleFor(x => x.CustomerId.Value).NotEmpty().WithMessage("CustomerId is required.");
         RuleFor(x => x.Items).NotEmpty().WithMessage("At least one item is required.");
         RuleForEach(x => x.Items).ChildRules(item =>
         {

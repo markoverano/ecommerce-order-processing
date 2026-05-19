@@ -7,5 +7,5 @@ namespace OrderService.Application.Repositories;
 public interface IOrderReadRepository
 {
     Task<OrderDto?> GetByIdAsync(OrderId orderId, CancellationToken cancellationToken = default);
-    Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<PagedResult<OrderDto>> GetAllAsync(int page, int pageSize, Guid? customerId = null, CancellationToken cancellationToken = default);
 }
