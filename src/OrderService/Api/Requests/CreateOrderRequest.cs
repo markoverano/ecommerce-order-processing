@@ -1,7 +1,6 @@
 namespace OrderService.Api.Requests;
 
 public sealed record CreateOrderRequest(
-    Guid CustomerId,
     IReadOnlyList<OrderItemRequestDto> Items,
     ShippingAddressRequestDto ShippingAddress);
 

@@ -1,8 +1,10 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.Utilities;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrderService.Api.Requests;
 using OrderService.Application.Queries;
@@ -12,6 +14,7 @@ namespace OrderService.Api.Controllers;
 /// <summary>Order lifecycle REST endpoints.</summary>
 [ApiController]
 [Route("api/v1/orders")]
+[Authorize(Roles = Roles.Customer)]
 public sealed class OrdersController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -33,7 +36,6 @@ public sealed class OrdersController : ControllerBase
         var correlationId = GetCorrelationId();
 
         var command = new CreateOrderCommand(
-            new CustomerId(request.CustomerId),
             request.Items
                 .Select(i => new OrderItemRequest(
                     new ProductId(i.ProductId),
@@ -61,7 +63,7 @@ public sealed class OrdersController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Data!.Value }, result);
     }
 
-    /// <summary>Returns a single order by ID.</summary>
+    /// <summary>Returns a single order by ID. Customers may only access their own orders.</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -76,8 +78,9 @@ public sealed class OrdersController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Returns a paginated list of orders.</summary>
+    /// <summary>Returns a paginated list of orders. Customers see only their own; admins see all.</summary>
     [HttpGet]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,

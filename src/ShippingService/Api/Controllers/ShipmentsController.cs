@@ -1,6 +1,8 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShippingService.Application.Queries;
 
@@ -19,6 +21,7 @@ public sealed class ShipmentsController : ControllerBase
 
     /// <summary>Books a FedEx shipment for the given order. Sent by the Saga Orchestrator after stock is reserved.</summary>
     [HttpPost]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Create([FromBody] CreateShipmentRequest request, CancellationToken cancellationToken)
     {
         var command = new CreateShipmentCommand(
@@ -36,8 +39,9 @@ public sealed class ShipmentsController : ControllerBase
         return Ok(new { shipmentId = result.Data!.Value });
     }
 
-    /// <summary>Returns shipment details by ID.</summary>
+    /// <summary>Returns shipment details by ID. Customers may only access their own shipments.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = Roles.Customer)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(new GetShipmentByIdQuery(ShipmentId.From(id)), cancellationToken);
@@ -50,6 +54,7 @@ public sealed class ShipmentsController : ControllerBase
 
     /// <summary>Cancels a shipment. Used by the Saga Orchestrator during compensation.</summary>
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelShipmentRequest request, CancellationToken cancellationToken)
     {
         var command = new CancelShipmentCommand(

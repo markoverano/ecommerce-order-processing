@@ -1,4 +1,6 @@
+using ECommerceOrderProcessing.Infrastructure.Auth;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Shared.Auth;
 using Microsoft.OpenApi.Models;
 using Serilog.Enrichers.OpenTelemetry;
 using ECommerceOrderProcessing.Infrastructure.Idempotency;
@@ -78,6 +80,9 @@ try
             sp.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(),
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<CachedOrderReadRepository>>()));
     builder.Services.AddScoped<CreateOrderCommandValidator>();
+    builder.Services.AddJwtAuthentication(config);
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
 
     builder.Services.AddStackExchangeRedisCache(opts =>
     {
@@ -138,14 +143,11 @@ try
         if (File.Exists(xmlPath))
             opts.IncludeXmlComments(xmlPath);
 
-        opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        var oidcAuthority = config["Oidc__Authority"] ?? "http://keycloak:8080/realms/ecommerce";
+        opts.AddSecurityDefinition("oidc", new OpenApiSecurityScheme
         {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "JWT Bearer token issued by Kong API Gateway."
+            Type = SecuritySchemeType.OpenIdConnect,
+            OpenIdConnectUrl = new Uri($"{oidcAuthority}/.well-known/openid-configuration")
         });
 
         opts.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -153,9 +155,9 @@ try
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "oidc" }
                 },
-                Array.Empty<string>()
+                new[] { Roles.Customer, Roles.Admin }
             }
         });
     });
@@ -175,6 +177,8 @@ try
     app.UseMiddleware<IdempotencyMiddleware>();
 
     app.UseRouting();
+    app.UseAuthentication();
+    app.UseAuthorization();
     app.UseHttpMetrics();
 
     app.MapControllers();

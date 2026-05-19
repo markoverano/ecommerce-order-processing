@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShippingService.Application.Webhooks;
 
@@ -7,6 +8,7 @@ namespace ShippingService.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/webhooks")]
+[AllowAnonymous]
 public sealed class WebhooksController : ControllerBase
 {
     private readonly FedExWebhookHandler _webhookHandler;

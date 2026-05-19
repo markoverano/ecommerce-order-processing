@@ -1,7 +1,9 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using InventoryService.Application.Queries;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InventoryService.Api.Controllers;
@@ -19,6 +21,7 @@ public sealed class InventoryController : ControllerBase
 
     /// <summary>Reserves stock for an order. Normally called by the Saga Orchestrator via RabbitMQ; also available over HTTP.</summary>
     [HttpPost("reserve")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Reserve([FromBody] ReserveStockRequest request, CancellationToken cancellationToken)
     {
         var correlationId = HttpContext.Items["CorrelationId"] is Guid cid ? cid : Guid.NewGuid();
@@ -36,6 +39,7 @@ public sealed class InventoryController : ControllerBase
 
     /// <summary>Releases a reservation as part of saga compensation.</summary>
     [HttpPost("reservations/{id:guid}/release")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Release(Guid id, [FromBody] ReleaseReservationRequest request, CancellationToken cancellationToken)
     {
         var correlationId = HttpContext.Items["CorrelationId"] is Guid cid ? cid : Guid.NewGuid();
@@ -47,6 +51,7 @@ public sealed class InventoryController : ControllerBase
 
     /// <summary>Returns current stock levels for a product.</summary>
     [HttpGet("products/{productId:guid}")]
+    [Authorize]
     public async Task<IActionResult> GetStock(Guid productId, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(new GetStockQuery(ProductId.From(productId)), cancellationToken);

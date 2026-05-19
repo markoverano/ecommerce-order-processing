@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using PaymentService.Application.Webhooks;
@@ -8,6 +9,7 @@ namespace PaymentService.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/webhooks")]
+[AllowAnonymous]
 public sealed class WebhooksController : ControllerBase
 {
     private readonly StripeWebhookHandler _webhookHandler;

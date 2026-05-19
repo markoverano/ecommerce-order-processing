@@ -1,3 +1,4 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Models;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -9,13 +10,16 @@ namespace NotificationService.Application.Queries;
 public sealed class GetNotificationQueryHandler : IRequestHandler<GetNotificationByIdQuery, ServiceResponse<NotificationDto>>
 {
     private readonly INotificationReadRepository _readRepository;
+    private readonly ICurrentUserAccessor _currentUserAccessor;
     private readonly ILogger<GetNotificationQueryHandler> _logger;
 
     public GetNotificationQueryHandler(
         INotificationReadRepository readRepository,
+        ICurrentUserAccessor currentUserAccessor,
         ILogger<GetNotificationQueryHandler> logger)
     {
         _readRepository = readRepository;
+        _currentUserAccessor = currentUserAccessor;
         _logger = logger;
     }
 
@@ -27,6 +31,12 @@ public sealed class GetNotificationQueryHandler : IRequestHandler<GetNotificatio
             _logger.LogInformation("Notification {NotificationId} not found.", query.NotificationId);
             return ServiceResponse<NotificationDto>.Failure("NOT_FOUND", $"Notification {query.NotificationId.Value} was not found.");
         }
+
+        var user = _currentUserAccessor.GetCurrentUser();
+        var isAdmin = user?.Roles.Contains(Roles.Admin) == true;
+
+        if (!isAdmin && dto.CustomerId != user?.UserId.Value)
+            return ServiceResponse<NotificationDto>.Failure("NOT_FOUND", $"Notification {query.NotificationId.Value} was not found.");
 
         return ServiceResponse<NotificationDto>.Success(dto);
     }

@@ -1,6 +1,8 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PaymentService.Api.Requests;
 using PaymentService.Application.Queries;
@@ -9,6 +11,7 @@ namespace PaymentService.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/payments")]
+[Authorize(Roles = Roles.Customer)]
 public sealed class PaymentsController : ControllerBase
 {
     private readonly ISender _mediator;
