@@ -1,4 +1,6 @@
+using ECommerceOrderProcessing.Infrastructure.Auth;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Shared.Auth;
 using Microsoft.OpenApi.Models;
 using Serilog.Enrichers.OpenTelemetry;
 using ECommerceOrderProcessing.Infrastructure.Messaging;
@@ -80,6 +82,9 @@ try
     builder.Services.AddScoped<NotifyCustomerCommandValidator>();
     builder.Services.AddScoped<MailgunWebhookHandler>();
     builder.Services.AddScoped<TwilioWebhookHandler>();
+    builder.Services.AddJwtAuthentication(config);
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
 
     var policyRegistry = new PolicyRegistry();
     PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "notification-service");
@@ -159,14 +164,11 @@ try
         if (File.Exists(xmlPath))
             opts.IncludeXmlComments(xmlPath);
 
-        opts.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        var oidcAuthority = config["Oidc__Authority"] ?? "http://keycloak:8080/realms/ecommerce";
+        opts.AddSecurityDefinition("oidc", new OpenApiSecurityScheme
         {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "JWT Bearer token issued by Kong API Gateway."
+            Type = SecuritySchemeType.OpenIdConnect,
+            OpenIdConnectUrl = new Uri($"{oidcAuthority}/.well-known/openid-configuration")
         });
 
         opts.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -174,9 +176,9 @@ try
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "oidc" }
                 },
-                Array.Empty<string>()
+                new[] { Roles.Customer, Roles.Admin }
             }
         });
     });
@@ -196,6 +198,8 @@ try
 
     app.UseRouting();
     app.UseCors("SignalRDev");
+    app.UseAuthentication();
+    app.UseAuthorization();
     app.UseHttpMetrics();
 
     app.MapControllers();

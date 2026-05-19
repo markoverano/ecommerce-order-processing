@@ -1,6 +1,8 @@
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationService.Api.Requests;
 using NotificationService.Application.Queries;
@@ -20,6 +22,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>Sends a customer notification via Mailgun (email) or Twilio (SMS).</summary>
     [HttpPost]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Send([FromBody] SendNotificationRequest request, CancellationToken cancellationToken)
     {
         var command = new NotifyCustomerCommand(
@@ -37,8 +40,9 @@ public sealed class NotificationsController : ControllerBase
         return Ok(new { notificationId = result.Data!.Value });
     }
 
-    /// <summary>Returns notification details by ID.</summary>
+    /// <summary>Returns notification details by ID. Customers may only access their own notifications.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = Roles.Customer)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(new GetNotificationByIdQuery(NotificationId.From(id)), cancellationToken);
@@ -51,6 +55,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>Returns the hub connection info for the given order so the browser client can subscribe to real-time updates.</summary>
     [HttpGet("token")]
+    [Authorize(Roles = Roles.Customer)]
     public IActionResult GetConnectionToken([FromQuery] Guid orderId)
     {
         if (orderId == Guid.Empty)

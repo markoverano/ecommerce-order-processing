@@ -1,12 +1,14 @@
-using Microsoft.AspNetCore.Mvc;
-using SagaOrchestrator.Domain.Exceptions;
-using SagaOrchestrator.Domain.Repositories;
+using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.ValueObjects;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using SagaOrchestrator.Domain.Repositories;
 
 namespace SagaOrchestrator.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/sagas")]
+[Authorize(Roles = Roles.Customer)]
 public sealed class SagasController : ControllerBase
 {
     private readonly ISagaRepository _repository;

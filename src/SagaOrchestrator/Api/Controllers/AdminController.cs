@@ -1,3 +1,5 @@
+using ECommerceOrderProcessing.Shared.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SagaOrchestrator.Application.Services;
 using SagaOrchestrator.Domain.Exceptions;
@@ -6,6 +8,7 @@ namespace SagaOrchestrator.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/admin/sagas")]
+[Authorize(Roles = Roles.Admin)]
 public sealed class AdminController : ControllerBase
 {
     private readonly SagaAdminService _adminService;

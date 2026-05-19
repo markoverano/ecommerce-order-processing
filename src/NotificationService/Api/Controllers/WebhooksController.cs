@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationService.Application.Webhooks;
 
@@ -7,6 +8,7 @@ namespace NotificationService.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/webhooks")]
+[AllowAnonymous]
 public sealed class WebhooksController : ControllerBase
 {
     private readonly MailgunWebhookHandler _mailgunHandler;
