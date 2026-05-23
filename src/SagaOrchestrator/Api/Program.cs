@@ -67,11 +67,13 @@ try
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
     builder.Services.AddScoped<ISagaRepository, EfCoreSagaRepository>();
     builder.Services.AddScoped<ISagaAdminReadRepository, EfCoreSagaAdminReadRepository>();
-    builder.Services.AddScoped<SagaOrchestrationService>();
+    builder.Services.AddScoped<ISagaCommandPublisher, SagaCommandPublisher>();
+    builder.Services.AddSagaEventHandlers();
     builder.Services.AddScoped<SagaAdminService>();
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     builder.Services.AddSingleton<IConnection>(_ =>
     {
@@ -86,8 +88,9 @@ try
         return factory.CreateConnection("saga-orchestrator");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
-    builder.Services.AddScoped<ISagaCommandPublisher, SagaCommandPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<SagaEventConsumer>();
 
