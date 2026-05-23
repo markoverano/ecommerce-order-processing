@@ -1,4 +1,4 @@
-namespace PaymentService.Infrastructure.Persistence;
+namespace ECommerceOrderProcessing.Infrastructure.Persistence;
 
 public sealed class ProcessedWebhook
 {
