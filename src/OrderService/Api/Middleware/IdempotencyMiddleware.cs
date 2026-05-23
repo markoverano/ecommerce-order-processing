@@ -1,20 +1,20 @@
-using System.Collections.Concurrent;
 using System.Text;
+using System.Text.Json;
+using ECommerceOrderProcessing.Infrastructure.Idempotency;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OrderService.Api.Middleware;
 
 /// <summary>
 /// Checks the X-Idempotency-Key header on mutating requests. If the key was already
 /// processed, the cached response is replayed. Otherwise the request proceeds and the
-/// response is cached for the duration of this process lifetime.
-/// Phase 13 replaces this in-process store with a Redis-backed TTL store.
+/// response is cached in Redis for 24 hours.
 /// </summary>
 public sealed class IdempotencyMiddleware
 {
-    private static readonly ConcurrentDictionary<string, CachedResponse> _store = new();
-
     private readonly RequestDelegate _next;
     private const string HeaderName = "X-Idempotency-Key";
+    private static readonly TimeSpan Ttl = TimeSpan.FromHours(24);
 
     public IdempotencyMiddleware(RequestDelegate next)
     {
@@ -35,14 +35,17 @@ public sealed class IdempotencyMiddleware
             return;
         }
 
-        var key = keyValues.ToString();
+        var key = $"http-idempotency:{keyValues}";
+        var store = context.RequestServices.GetRequiredService<IGlobalIdempotencyStore>();
 
-        if (_store.TryGetValue(key, out var cached))
+        var cached = await store.TryGetAsync(key, context.RequestAborted);
+        if (cached is not null)
         {
-            context.Response.StatusCode = cached.StatusCode;
-            context.Response.ContentType = cached.ContentType;
+            var entry = JsonSerializer.Deserialize<CachedResponse>(cached)!;
+            context.Response.StatusCode = entry.StatusCode;
+            context.Response.ContentType = entry.ContentType;
             context.Response.Headers.Append("X-Idempotency-Replayed", "true");
-            await context.Response.WriteAsync(cached.Body, Encoding.UTF8);
+            await context.Response.WriteAsync(entry.Body, Encoding.UTF8);
             return;
         }
 
@@ -59,10 +62,11 @@ public sealed class IdempotencyMiddleware
 
             if (context.Response.StatusCode is >= 200 and < 300)
             {
-                _store.TryAdd(key, new CachedResponse(
+                var entry = new CachedResponse(
                     context.Response.StatusCode,
                     context.Response.ContentType ?? "application/json",
-                    responseBody));
+                    responseBody);
+                await store.SetAsync(key, JsonSerializer.Serialize(entry), Ttl, context.RequestAborted);
             }
 
             buffer.Position = 0;
