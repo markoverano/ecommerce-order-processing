@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.Persistence;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,11 +11,6 @@ public sealed class EfCoreEventStore : IEventStore
 {
     private readonly DbContextBase _db;
     private readonly ILogger<EfCoreEventStore> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCoreEventStore(DbContextBase db, ILogger<EfCoreEventStore> logger)
     {
@@ -39,7 +35,7 @@ public sealed class EfCoreEventStore : IEventStore
                 AggregateId = aggregateId,
                 AggregateType = aggregateType,
                 EventType = domainEvent.GetType().AssemblyQualifiedName ?? domainEvent.GetType().FullName!,
-                EventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), _jsonOptions),
+                EventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), InfrastructureJsonOptions.Default),
                 Version = domainEvent.Version,
                 Timestamp = domainEvent.Timestamp,
                 CorrelationId = domainEvent.CorrelationId
@@ -73,7 +69,7 @@ public sealed class EfCoreEventStore : IEventStore
     {
         var type = Type.GetType(stored.EventType)
             ?? throw new InvalidOperationException($"Cannot resolve event type '{stored.EventType}'.");
-        return (DomainEvent)(JsonSerializer.Deserialize(stored.EventData, type, _jsonOptions)
+        return (DomainEvent)(JsonSerializer.Deserialize(stored.EventData, type, InfrastructureJsonOptions.Default)
             ?? throw new InvalidOperationException($"Failed to deserialize event of type '{stored.EventType}'."));
     }
 }

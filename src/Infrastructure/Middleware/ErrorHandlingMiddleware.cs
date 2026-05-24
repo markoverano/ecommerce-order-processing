@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -10,16 +11,16 @@ namespace ECommerceOrderProcessing.Infrastructure.Middleware;
 public sealed class ErrorHandlingMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly ICorrelationIdAccessor _correlationIdAccessor;
     private readonly ILogger<ErrorHandlingMiddleware> _logger;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+    public ErrorHandlingMiddleware(
+        RequestDelegate next,
+        ICorrelationIdAccessor correlationIdAccessor,
+        ILogger<ErrorHandlingMiddleware> logger)
     {
         _next = next;
+        _correlationIdAccessor = correlationIdAccessor;
         _logger = logger;
     }
 
@@ -37,7 +38,7 @@ public sealed class ErrorHandlingMiddleware
 
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var correlationId = context.Items["X-Correlation-ID"] as Guid? ?? Guid.Empty;
+        var correlationId = _correlationIdAccessor.GetCorrelationId(context);
         _logger.LogError(exception, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
 
         var (statusCode, code) = exception switch
@@ -52,7 +53,7 @@ public sealed class ErrorHandlingMiddleware
         context.Response.ContentType = "application/json";
 
         var error = new ErrorResponse(code, "An error occurred while processing your request.");
-        var body = JsonSerializer.Serialize(error, _jsonOptions);
+        var body = JsonSerializer.Serialize(error, InfrastructureJsonOptions.Default);
         await context.Response.WriteAsync(body);
     }
 }

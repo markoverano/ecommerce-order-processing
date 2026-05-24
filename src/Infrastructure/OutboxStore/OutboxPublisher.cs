@@ -43,7 +43,7 @@ public sealed class OutboxPublisher : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var outboxStore = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-        var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IOutboxEventPublisher>();
 
         var messages = await outboxStore.GetUnpublishedAsync(BatchSize, cancellationToken);
         if (messages.Count == 0)

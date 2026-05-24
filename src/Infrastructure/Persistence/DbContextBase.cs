@@ -1,12 +1,12 @@
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
-using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceOrderProcessing.Infrastructure.Persistence;
 
 /// <summary>
 /// Shared EF Core base that every service DbContext inherits from.
-/// Provides the events, outbox, and snapshots tables required by the event-sourcing, outbox, and snapshot patterns.
+/// Provides the events, outbox, and processed_webhooks tables required by the event-sourcing,
+/// outbox, and webhook-deduplication patterns.
 /// </summary>
 public abstract class DbContextBase : DbContext
 {
@@ -14,14 +14,14 @@ public abstract class DbContextBase : DbContext
 
     public DbSet<StoredEvent> Events => Set<StoredEvent>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
-    public DbSet<AggregateSnapshot> Snapshots => Set<AggregateSnapshot>();
+    public DbSet<ProcessedWebhook> ProcessedWebhooks => Set<ProcessedWebhook>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         ConfigureEvents(modelBuilder);
         ConfigureOutbox(modelBuilder);
-        ConfigureSnapshots(modelBuilder);
+        ConfigureProcessedWebhooks(modelBuilder);
     }
 
     private static void ConfigureEvents(ModelBuilder modelBuilder)
@@ -57,19 +57,17 @@ public abstract class DbContextBase : DbContext
         });
     }
 
-    private static void ConfigureSnapshots(ModelBuilder modelBuilder)
+    private static void ConfigureProcessedWebhooks(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<AggregateSnapshot>(e =>
+        modelBuilder.Entity<ProcessedWebhook>(e =>
         {
-            e.ToTable("snapshots");
-            e.HasKey(x => x.SnapshotId);
-            e.Property(x => x.SnapshotId).HasColumnName("snapshot_id").UseIdentityAlwaysColumn();
-            e.Property(x => x.AggregateId).HasColumnName("aggregate_id");
-            e.Property(x => x.AggregateType).HasColumnName("aggregate_type").HasMaxLength(200);
-            e.Property(x => x.SnapshotData).HasColumnName("snapshot_data").HasColumnType("jsonb");
-            e.Property(x => x.Version).HasColumnName("version");
-            e.Property(x => x.CreatedAt).HasColumnName("created_at");
-            e.HasIndex(x => new { x.AggregateId, x.Version }).HasDatabaseName("ix_snapshots_aggregate_version");
+            e.ToTable("processed_webhooks");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+            e.Property(x => x.WebhookId).HasColumnName("webhook_id").HasMaxLength(200);
+            e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
+            e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
+            e.HasIndex(x => x.WebhookId).IsUnique();
         });
     }
 }

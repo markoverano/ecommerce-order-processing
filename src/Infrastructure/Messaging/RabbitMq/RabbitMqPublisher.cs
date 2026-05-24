@@ -1,23 +1,19 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 
 namespace ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 
-public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
+public sealed class RabbitMqPublisher : IEventPublisher, IOutboxEventPublisher, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
     private readonly ILogger<RabbitMqPublisher> _logger;
     private const string ExchangeName = "order.events";
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public RabbitMqPublisher(IConnection connection, ILogger<RabbitMqPublisher> logger)
     {
@@ -31,7 +27,7 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
     public async Task PublishAsync<T>(T domainEvent, string routingKey, CancellationToken cancellationToken = default) where T : DomainEvent
     {
         var eventType = domainEvent.GetType().Name;
-        var eventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), _jsonOptions);
+        var eventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), InfrastructureJsonOptions.Default);
         await PublishAsync(eventType, eventData, routingKey, cancellationToken);
     }
 

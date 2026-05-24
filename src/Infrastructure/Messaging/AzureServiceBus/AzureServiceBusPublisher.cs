@@ -1,20 +1,16 @@
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerceOrderProcessing.Infrastructure.Messaging.AzureServiceBus;
 
-public sealed class AzureServiceBusPublisher : IEventPublisher, IAsyncDisposable
+public sealed class AzureServiceBusPublisher : IEventPublisher, IOutboxEventPublisher, IAsyncDisposable
 {
     private readonly ServiceBusClient _client;
     private readonly ILogger<AzureServiceBusPublisher> _logger;
     private const string TopicName = "order-events";
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public AzureServiceBusPublisher(ServiceBusClient client, ILogger<AzureServiceBusPublisher> logger)
     {
@@ -25,7 +21,7 @@ public sealed class AzureServiceBusPublisher : IEventPublisher, IAsyncDisposable
     public async Task PublishAsync<T>(T domainEvent, string routingKey, CancellationToken cancellationToken = default) where T : DomainEvent
     {
         var eventType = domainEvent.GetType().Name;
-        var eventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), _jsonOptions);
+        var eventData = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), InfrastructureJsonOptions.Default);
         await PublishAsync(eventType, eventData, routingKey, cancellationToken);
     }
 

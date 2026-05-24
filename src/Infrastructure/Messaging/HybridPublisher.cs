@@ -8,10 +8,12 @@ namespace ECommerceOrderProcessing.Infrastructure.Messaging;
 /// falls back to Azure Service Bus. <see cref="BrokerHealthTracker"/> is updated on every transition
 /// so health checks can surface broker degradation independently of the publish path.
 /// </summary>
-public sealed class HybridPublisher : IEventPublisher
+public sealed class HybridPublisher : IEventPublisher, IOutboxEventPublisher
 {
     private readonly IEventPublisher _primary;
     private readonly IEventPublisher _fallback;
+    private readonly IOutboxEventPublisher _primaryRaw;
+    private readonly IOutboxEventPublisher _fallbackRaw;
     private readonly BrokerHealthTracker _healthTracker;
     private readonly ILogger<HybridPublisher> _logger;
     private static readonly TimeSpan PrimaryTimeout = TimeSpan.FromMilliseconds(500);
@@ -19,11 +21,15 @@ public sealed class HybridPublisher : IEventPublisher
     public HybridPublisher(
         IEventPublisher primary,
         IEventPublisher fallback,
+        IOutboxEventPublisher primaryRaw,
+        IOutboxEventPublisher fallbackRaw,
         BrokerHealthTracker healthTracker,
         ILogger<HybridPublisher> logger)
     {
         _primary = primary;
         _fallback = fallback;
+        _primaryRaw = primaryRaw;
+        _fallbackRaw = fallbackRaw;
         _healthTracker = healthTracker;
         _logger = logger;
     }
@@ -53,14 +59,14 @@ public sealed class HybridPublisher : IEventPublisher
 
         try
         {
-            await _primary.PublishAsync(eventType, eventData, routingKey, cts.Token);
+            await _primaryRaw.PublishAsync(eventType, eventData, routingKey, cts.Token);
             _healthTracker.RecordPrimarySuccess();
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(ex, "RabbitMQ publish failed for {EventType}; activating Azure Service Bus fallback", eventType);
             _healthTracker.RecordFallbackActivated();
-            await _fallback.PublishAsync(eventType, eventData, routingKey, cancellationToken);
+            await _fallbackRaw.PublishAsync(eventType, eventData, routingKey, cancellationToken);
         }
     }
 }
