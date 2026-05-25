@@ -1,5 +1,6 @@
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
+using ECommerceOrderProcessing.Shared.Validation;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -36,10 +37,7 @@ public sealed class ProcessPaymentCommandHandler : IRequestHandler<ProcessPaymen
     {
         var validation = await _validator.ValidateAsync(command, cancellationToken);
         if (!validation.IsValid)
-        {
-            var errors = string.Join("; ", validation.Errors.Select(e => e.ErrorMessage));
-            return ServiceResponse<PaymentId>.Failure("VALIDATION_FAILED", errors);
-        }
+            return validation.ToFailureResponse<PaymentId>();
 
         var payment = Payment.Create(command.OrderId, command.CustomerId, command.Amount, command.PaymentMethodId, command.CorrelationId);
 

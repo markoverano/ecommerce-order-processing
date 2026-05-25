@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using PaymentService.Application.Commands;
+using ECommerceOrderProcessing.Infrastructure.Webhooks;
+using ECommerceOrderProcessing.Shared.Webhooks;
 using PaymentService.Application.ExternalClients;
 using PaymentService.Application.Repositories;
 using PaymentService.Application.Validation;
@@ -23,7 +25,6 @@ using PaymentService.Infrastructure.ExternalClients;
 using PaymentService.Infrastructure.Messaging;
 using PaymentService.Infrastructure.Persistence;
 using PaymentService.Infrastructure.Repositories;
-using PaymentService.Infrastructure.Webhooks;
 using Polly.Registry;
 using Prometheus;
 using RabbitMQ.Client;
@@ -75,12 +76,13 @@ try
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
     builder.Services.AddScoped<IPaymentRepository, EfCorePaymentRepository>();
     builder.Services.AddScoped<IPaymentReadRepository, EfCorePaymentReadRepository>();
-    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator>();
+    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator<PaymentDbContext>>();
     builder.Services.AddScoped<ProcessPaymentCommandValidator>();
     builder.Services.AddScoped<StripeWebhookHandler>();
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     var policyRegistry = new PolicyRegistry();
     PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "payment-service");
@@ -105,7 +107,9 @@ try
         return factory.CreateConnection("payment-service");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<PaymentCommandConsumer>();
 
