@@ -79,6 +79,7 @@ try
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     var policyRegistry = new PolicyRegistry();
     PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "inventory-service");
@@ -101,7 +102,9 @@ try
         return factory.CreateConnection("inventory-service");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<InventoryCommandConsumer>();
     builder.Services.AddHostedService<ReservationExpiryService>();
