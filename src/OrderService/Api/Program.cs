@@ -9,7 +9,6 @@ using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Persistence;
-using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
@@ -71,7 +70,6 @@ try
     builder.Services.AddScoped<DbContextBase>(sp => sp.GetRequiredService<OrderDbContext>());
     builder.Services.AddScoped<IEventStore, EfCoreEventStore>();
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
-    builder.Services.AddScoped<ISnapshotStore, EfCoreSnapshotStore>();
     builder.Services.AddScoped<IOrderRepository, EfCoreOrderRepository>();
     builder.Services.AddScoped<EfCoreOrderReadRepository>();
     builder.Services.AddScoped<IOrderReadRepository>(sp =>
@@ -83,6 +81,7 @@ try
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     builder.Services.AddStackExchangeRedisCache(opts =>
     {
@@ -110,7 +109,9 @@ try
         return factory.CreateConnection("order-service");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<OrderEventConsumer>();
 

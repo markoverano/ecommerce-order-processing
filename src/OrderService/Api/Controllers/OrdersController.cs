@@ -1,3 +1,4 @@
+using ECommerceOrderProcessing.Infrastructure.Middleware;
 using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
@@ -18,10 +19,12 @@ namespace OrderService.Api.Controllers;
 public sealed class OrdersController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICorrelationIdAccessor _correlationIdAccessor;
 
-    public OrdersController(IMediator mediator)
+    public OrdersController(IMediator mediator, ICorrelationIdAccessor correlationIdAccessor)
     {
         _mediator = mediator;
+        _correlationIdAccessor = correlationIdAccessor;
     }
 
     /// <summary>Creates a new order and enqueues it for saga processing.</summary>
@@ -33,7 +36,7 @@ public sealed class OrdersController : ControllerBase
         [FromHeader(Name = "X-Idempotency-Key")] string? idempotencyKey,
         CancellationToken cancellationToken)
     {
-        var correlationId = GetCorrelationId();
+        var correlationId = _correlationIdAccessor.GetCorrelationId(HttpContext);
 
         var command = new CreateOrderCommand(
             request.Items
@@ -69,7 +72,7 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var query = new GetOrderByIdQuery(OrderId.From(id), GetCorrelationId());
+        var query = new GetOrderByIdQuery(OrderId.From(id), _correlationIdAccessor.GetCorrelationId(HttpContext));
         var result = await _mediator.Send(query, cancellationToken);
 
         if (!result.IsSuccess)
@@ -87,15 +90,9 @@ public sealed class OrdersController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetOrdersQuery(page, pageSize, GetCorrelationId());
+        var query = new GetOrdersQuery(page, pageSize, _correlationIdAccessor.GetCorrelationId(HttpContext));
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }
 
-    private Guid GetCorrelationId()
-    {
-        if (HttpContext.Items.TryGetValue("X-Correlation-ID", out var val) && val is string s && Guid.TryParse(s, out var id))
-            return id;
-        return Guid.NewGuid();
-    }
 }

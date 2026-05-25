@@ -1,6 +1,7 @@
 using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Models;
+using ECommerceOrderProcessing.Shared.Validation;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -35,9 +36,8 @@ public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderComma
         var validation = await _validator.ValidateAsync(command, cancellationToken);
         if (!validation.IsValid)
         {
-            var errors = string.Join("; ", validation.Errors.Select(e => e.ErrorMessage));
             OrderMetrics.OrderCreationFailed.Inc();
-            return ServiceResponse<OrderId>.Failure("VALIDATION_FAILED", errors);
+            return validation.ToFailureResponse<OrderId>();
         }
 
         // The [Authorize] attribute guarantees this is non-null on any reachable code path.
