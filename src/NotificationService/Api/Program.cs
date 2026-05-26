@@ -24,7 +24,8 @@ using NotificationService.Infrastructure.ExternalClients;
 using NotificationService.Infrastructure.Messaging;
 using NotificationService.Infrastructure.Persistence;
 using NotificationService.Infrastructure.Repositories;
-using NotificationService.Infrastructure.Webhooks;
+using ECommerceOrderProcessing.Infrastructure.Webhooks;
+using ECommerceOrderProcessing.Shared.Webhooks;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly.Registry;
@@ -78,13 +79,14 @@ try
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
     builder.Services.AddScoped<INotificationRepository, EfCoreNotificationRepository>();
     builder.Services.AddScoped<INotificationReadRepository, EfCoreNotificationReadRepository>();
-    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator>();
+    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator<NotificationDbContext>>();
     builder.Services.AddScoped<NotifyCustomerCommandValidator>();
     builder.Services.AddScoped<MailgunWebhookHandler>();
     builder.Services.AddScoped<TwilioWebhookHandler>();
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     var policyRegistry = new PolicyRegistry();
     PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "notification-service");
@@ -117,7 +119,9 @@ try
         return factory.CreateConnection("notification-service");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<NotificationCommandConsumer>();
 

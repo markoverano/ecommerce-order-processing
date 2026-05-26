@@ -8,7 +8,6 @@ public sealed class NotificationDbContext : DbContextBase
     public NotificationDbContext(DbContextOptions<NotificationDbContext> options) : base(options) { }
 
     public DbSet<NotificationReadModel> NotificationViewModels => Set<NotificationReadModel>();
-    public DbSet<ProcessedWebhook> ProcessedWebhooks => Set<ProcessedWebhook>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,17 +29,6 @@ public sealed class NotificationDbContext : DbContextBase
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.ProviderMessageId);
-        });
-
-        modelBuilder.Entity<ProcessedWebhook>(e =>
-        {
-            e.ToTable("processed_webhooks");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id).HasColumnName("id").UseIdentityAlwaysColumn();
-            e.Property(x => x.WebhookId).HasColumnName("webhook_id").HasMaxLength(200);
-            e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
-            e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
-            e.HasIndex(x => x.WebhookId).IsUnique();
         });
     }
 }

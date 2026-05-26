@@ -1,4 +1,5 @@
 using ECommerceOrderProcessing.Shared.ValueObjects;
+using ECommerceOrderProcessing.Shared.Webhooks;
 using Microsoft.Extensions.Logging;
 using NotificationService.Application.Repositories;
 using NotificationService.Domain.Enums;
