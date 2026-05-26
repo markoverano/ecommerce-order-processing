@@ -13,7 +13,7 @@ namespace SagaOrchestrator.Infrastructure.Messaging;
 /// </summary>
 public sealed class SagaCommandPublisher : ISagaCommandPublisher
 {
-    private readonly IEventPublisher _publisher;
+    private readonly IOutboxEventPublisher _publisher;
     private readonly ILogger<SagaCommandPublisher> _logger;
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -21,7 +21,7 @@ public sealed class SagaCommandPublisher : ISagaCommandPublisher
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public SagaCommandPublisher(IEventPublisher publisher, ILogger<SagaCommandPublisher> logger)
+    public SagaCommandPublisher(IOutboxEventPublisher publisher, ILogger<SagaCommandPublisher> logger)
     {
         _publisher = publisher;
         _logger = logger;
