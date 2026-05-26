@@ -29,7 +29,8 @@ using ShippingService.Infrastructure.ExternalClients;
 using ShippingService.Infrastructure.Messaging;
 using ShippingService.Infrastructure.Persistence;
 using ShippingService.Infrastructure.Repositories;
-using ShippingService.Infrastructure.Webhooks;
+using ECommerceOrderProcessing.Infrastructure.Webhooks;
+using ECommerceOrderProcessing.Shared.Webhooks;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -75,12 +76,13 @@ try
     builder.Services.AddScoped<IOutboxStore, EfCoreOutboxStore>();
     builder.Services.AddScoped<IShipmentRepository, EfCoreShipmentRepository>();
     builder.Services.AddScoped<IShipmentReadRepository, EfCoreShipmentReadRepository>();
-    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator>();
+    builder.Services.AddScoped<IWebhookDeduplicator, EfCoreWebhookDeduplicator<ShippingDbContext>>();
     builder.Services.AddScoped<CreateShipmentCommandValidator>();
     builder.Services.AddScoped<FedExWebhookHandler>();
     builder.Services.AddJwtAuthentication(config);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+    builder.Services.AddSingleton<ICorrelationIdAccessor, CorrelationIdAccessor>();
 
     var policyRegistry = new PolicyRegistry();
     PollyPolicies.RegisterPolicies(policyRegistry, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "shipping-service");
@@ -110,7 +112,9 @@ try
         return factory.CreateConnection("shipping-service");
     });
 
-    builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+    builder.Services.AddSingleton<RabbitMqPublisher>();
+    builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
+    builder.Services.AddSingleton<IOutboxEventPublisher>(sp => sp.GetRequiredService<RabbitMqPublisher>());
     builder.Services.AddHostedService<OutboxPublisher>();
     builder.Services.AddHostedService<ShippingCommandConsumer>();
 
