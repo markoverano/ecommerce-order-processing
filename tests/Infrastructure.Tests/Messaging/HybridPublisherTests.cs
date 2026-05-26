@@ -9,20 +9,22 @@ public class HybridPublisherTests
 {
     private readonly Mock<IEventPublisher> _primary = new();
     private readonly Mock<IEventPublisher> _fallback = new();
+    private readonly Mock<IOutboxEventPublisher> _primaryRaw = new();
+    private readonly Mock<IOutboxEventPublisher> _fallbackRaw = new();
     private readonly BrokerHealthTracker _tracker = new();
 
     private HybridPublisher CreatePublisher() =>
-        new(_primary.Object, _fallback.Object, _tracker, NullLogger<HybridPublisher>.Instance);
+        new(_primary.Object, _fallback.Object, _primaryRaw.Object, _fallbackRaw.Object, _tracker, NullLogger<HybridPublisher>.Instance);
 
     [Fact]
     public async Task PublishAsync_PrimarySucceeds_FallbackNotInvoked()
     {
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
 
-        _fallback.Verify(
+        _fallbackRaw.Verify(
             f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -30,14 +32,14 @@ public class HybridPublisherTests
     [Fact]
     public async Task PublishAsync_PrimaryThrows_FallbackInvoked()
     {
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("broker unavailable"));
-        _fallback.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _fallbackRaw.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
 
-        _fallback.Verify(
+        _fallbackRaw.Verify(
             f => f.PublishAsync("OrderCreated", "{}", "order.created", It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -45,14 +47,14 @@ public class HybridPublisherTests
     [Fact]
     public async Task PublishAsync_PrimaryTimesOut_FallbackInvoked()
     {
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(async (string _, string _, string _, CancellationToken ct) => await Task.Delay(TimeSpan.FromSeconds(10), ct));
-        _fallback.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _fallbackRaw.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
 
-        _fallback.Verify(
+        _fallbackRaw.Verify(
             f => f.PublishAsync("OrderCreated", "{}", "order.created", It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -60,9 +62,9 @@ public class HybridPublisherTests
     [Fact]
     public async Task PublishAsync_PrimaryFails_HealthTrackerSetToFallback()
     {
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("connection refused"));
-        _fallback.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _fallbackRaw.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
@@ -75,15 +77,15 @@ public class HybridPublisherTests
     public async Task PublishAsync_PrimaryRecovers_HealthTrackerClearsFallback()
     {
         // Arrange: drive into fallback state
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("connection refused"));
-        _fallback.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _fallbackRaw.Setup(f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
         Assert.True(_tracker.IsUsingFallback);
 
         // Act: primary recovers
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         await CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created");
 
@@ -96,7 +98,7 @@ public class HybridPublisherTests
     {
         using var cts = new CancellationTokenSource();
 
-        _primary.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _primaryRaw.Setup(p => p.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(async (string _, string _, string _, CancellationToken ct) => await Task.Delay(TimeSpan.FromSeconds(10), ct));
 
         cts.CancelAfter(TimeSpan.FromMilliseconds(100));
@@ -104,7 +106,7 @@ public class HybridPublisherTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             CreatePublisher().PublishAsync("OrderCreated", "{}", "order.created", cts.Token));
 
-        _fallback.Verify(
+        _fallbackRaw.Verify(
             f => f.PublishAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
