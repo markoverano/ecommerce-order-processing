@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
 using ECommerceOrderProcessing.Shared.Auth;
 using ECommerceOrderProcessing.Shared.Commands;
@@ -86,8 +87,8 @@ public sealed class OrdersController : ControllerBase
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] [Range(1, int.MaxValue)] int page = 1,
+        [FromQuery] [Range(1, 100)] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
         var query = new GetOrdersQuery(page, pageSize, _correlationIdAccessor.GetCorrelationId(HttpContext));
