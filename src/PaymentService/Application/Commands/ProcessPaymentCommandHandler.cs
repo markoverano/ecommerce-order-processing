@@ -43,7 +43,7 @@ public sealed class ProcessPaymentCommandHandler : IRequestHandler<ProcessPaymen
 
         try
         {
-            var result = await _stripe.ChargeAsync(command.PaymentMethodId, command.Amount, command.CorrelationId, cancellationToken);
+            var result = await _stripe.ChargeAsync(command.PaymentMethodId, command.Amount, command.CorrelationId, command.OrderId, command.CustomerId, cancellationToken);
 
             if (result.IsSuccess)
                 payment.MarkAsProcessed(StripeChargeId.From(result.ChargeId!), command.CorrelationId);

@@ -42,6 +42,8 @@ public sealed class StripePaymentGateway : IStripePaymentGateway
         string paymentMethodId,
         Money amount,
         Guid idempotencyKey,
+        OrderId orderId,
+        CustomerId customerId,
         CancellationToken cancellationToken = default)
     {
         var options = new ChargeCreateOptions
@@ -49,7 +51,13 @@ public sealed class StripePaymentGateway : IStripePaymentGateway
             Amount = (long)(amount.Amount * 100),
             Currency = amount.Currency.ToLowerInvariant(),
             Source = paymentMethodId,
-            Description = $"Order payment ref:{idempotencyKey}"
+            Description = $"Order payment ref:{idempotencyKey}",
+            Metadata = new Dictionary<string, string>
+            {
+                ["order_id"] = orderId.Value.ToString(),
+                ["customer_id"] = customerId.Value.ToString(),
+                ["order_amount_cents"] = ((long)(amount.Amount * 100)).ToString()
+            }
         };
 
         var requestOptions = new RequestOptions { IdempotencyKey = idempotencyKey.ToString() };
