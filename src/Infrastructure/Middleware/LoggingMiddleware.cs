@@ -28,10 +28,11 @@ public sealed class LoggingMiddleware
         finally
         {
             stopwatch.Stop();
+            // Log only the path — never query strings, which may contain customer IDs or tokens.
             _logger.LogInformation(
                 "HTTP {Method} {Path} responded {StatusCode} in {ElapsedMs}ms. CorrelationId={CorrelationId}",
                 context.Request.Method,
-                context.Request.Path,
+                context.Request.Path.Value,
                 context.Response.StatusCode,
                 stopwatch.ElapsedMilliseconds,
                 correlationId);
