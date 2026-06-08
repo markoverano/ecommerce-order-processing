@@ -54,7 +54,12 @@ public sealed class WebhooksController : ControllerBase
         var timestamp = parts.FirstOrDefault(p => p.StartsWith("t=", StringComparison.Ordinal))?.Substring(2);
         var hash = parts.FirstOrDefault(p => p.StartsWith("v1=", StringComparison.Ordinal))?.Substring(3);
 
-        if (timestamp is null || hash is null)
+        if (timestamp is null || hash is null || !long.TryParse(timestamp, out var unixTime))
+            return false;
+
+        // Reject webhooks older than 5 minutes to prevent replay attacks.
+        var webhookAge = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(unixTime);
+        if (webhookAge > TimeSpan.FromSeconds(300))
             return false;
 
         // Stripe signed payload format: "{timestamp}.{body}"
