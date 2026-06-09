@@ -51,11 +51,17 @@ try
         var elasticUri = ctx.Configuration["Elasticsearch__Uri"];
         if (!string.IsNullOrEmpty(elasticUri))
         {
+            var elasticUser = ctx.Configuration["Elasticsearch__Username"];
+            var elasticPass = ctx.Configuration["Elasticsearch__Password"];
             cfg.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
             {
                 AutoRegisterTemplate = true,
                 IndexFormat = "ecommerce-inventory-{0:yyyy.MM.dd}",
                 BatchAction = ElasticOpType.Create,
+                ModifyConnectionSettings = conn =>
+                    !string.IsNullOrEmpty(elasticUser) && !string.IsNullOrEmpty(elasticPass)
+                        ? conn.BasicAuthentication(elasticUser, elasticPass)
+                        : conn,
                 FailureCallback = (_, ex) =>
                     Console.Error.WriteLine($"Elasticsearch sink failed: {ex?.Message}")
             });
@@ -162,6 +168,12 @@ try
     {
         var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         await db.Database.MigrateAsync();
+    }
+
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHsts();
+        app.UseHttpsRedirection();
     }
 
     app.UseSerilogRequestLogging();
