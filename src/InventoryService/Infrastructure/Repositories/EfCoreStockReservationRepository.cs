@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Domain;
 using ECommerceOrderProcessing.Shared.Events.Inventory;
@@ -21,11 +22,6 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
     private readonly IEventStore _eventStore;
     private readonly IOutboxStore _outboxStore;
     private readonly ILogger<EfCoreStockReservationRepository> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCoreStockReservationRepository(
         InventoryDbContext db,
@@ -113,7 +109,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                 var sharedEvent = new StockReserved(e.ReservationId, e.OrderId, items, e.Version, e.CorrelationId);
                 return (
                     nameof(StockReserved),
-                    JsonSerializer.Serialize(sharedEvent, typeof(StockReserved), _jsonOptions),
+                    JsonSerializer.Serialize(sharedEvent, typeof(StockReserved), InfrastructureJsonOptions.Default),
                     "inventory.stock-reserved");
             }
 
@@ -125,7 +121,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                     e.Version, e.CorrelationId);
                 return (
                     nameof(OutOfStock),
-                    JsonSerializer.Serialize(sharedEvent, typeof(OutOfStock), _jsonOptions),
+                    JsonSerializer.Serialize(sharedEvent, typeof(OutOfStock), InfrastructureJsonOptions.Default),
                     "inventory.out-of-stock");
             }
 
@@ -134,7 +130,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                 var sharedEvent = new StockReleased(e.ReservationId, e.OrderId, e.Version, e.CorrelationId);
                 return (
                     nameof(StockReleased),
-                    JsonSerializer.Serialize(sharedEvent, typeof(StockReleased), _jsonOptions),
+                    JsonSerializer.Serialize(sharedEvent, typeof(StockReleased), InfrastructureJsonOptions.Default),
                     "inventory.stock-released");
             }
 
@@ -159,7 +155,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                         Id = reservation.Id,
                         OrderId = reservation.OrderId.Value,
                         Status = "Reserved",
-                        ItemsJson = JsonSerializer.Serialize(e.Items, _jsonOptions),
+                        ItemsJson = JsonSerializer.Serialize(e.Items, InfrastructureJsonOptions.Default),
                         ExpiresAt = e.ExpiresAt,
                         CreatedAt = e.Timestamp
                     });
@@ -171,7 +167,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                         Id = reservation.Id,
                         OrderId = reservation.OrderId.Value,
                         Status = "Failed",
-                        ItemsJson = JsonSerializer.Serialize(e.Items, _jsonOptions),
+                        ItemsJson = JsonSerializer.Serialize(e.Items, InfrastructureJsonOptions.Default),
                         ExpiresAt = DateTimeOffset.MinValue,
                         CreatedAt = e.Timestamp,
                         UpdatedAt = e.Timestamp

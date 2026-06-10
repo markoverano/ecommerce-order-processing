@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Events.Saga;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
@@ -17,11 +18,6 @@ public sealed class EfCoreSagaRepository : ISagaRepository
     private readonly SagaDbContext _db;
     private readonly IOutboxStore _outboxStore;
     private readonly ILogger<EfCoreSagaRepository> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCoreSagaRepository(
         SagaDbContext db,
@@ -72,7 +68,7 @@ public sealed class EfCoreSagaRepository : ISagaRepository
         {
             var outboxMessage = OutboxMessage.Create(
                 evt.GetType().Name,
-                JsonSerializer.Serialize(evt, evt.GetType(), _jsonOptions),
+                JsonSerializer.Serialize(evt, evt.GetType(), InfrastructureJsonOptions.Default),
                 GetRoutingKey(evt));
             await _outboxStore.AddAsync(outboxMessage, cancellationToken);
         }
@@ -95,8 +91,8 @@ public sealed class EfCoreSagaRepository : ISagaRepository
 
     private static OrderProcessingSaga MapToDomain(SagaState state)
     {
-        var shippingAddress = JsonSerializer.Deserialize<ShippingAddressDto>(state.ShippingAddressJson, _jsonOptions)!;
-        var items = JsonSerializer.Deserialize<List<OrderItemDto>>(state.ItemsJson, _jsonOptions)!;
+        var shippingAddress = JsonSerializer.Deserialize<ShippingAddressDto>(state.ShippingAddressJson, InfrastructureJsonOptions.Default)!;
+        var items = JsonSerializer.Deserialize<List<OrderItemDto>>(state.ItemsJson, InfrastructureJsonOptions.Default)!;
 
         return OrderProcessingSaga.FromSnapshot(
             sagaId: state.SagaId,
@@ -148,8 +144,8 @@ public sealed class EfCoreSagaRepository : ISagaRepository
             CurrentStep = saga.CurrentStep.ToString(),
             TotalAmount = saga.TotalAmount.Amount,
             Currency = saga.TotalAmount.Currency,
-            ShippingAddressJson = JsonSerializer.Serialize(addressDto, _jsonOptions),
-            ItemsJson = JsonSerializer.Serialize(itemDtos, _jsonOptions),
+            ShippingAddressJson = JsonSerializer.Serialize(addressDto, InfrastructureJsonOptions.Default),
+            ItemsJson = JsonSerializer.Serialize(itemDtos, InfrastructureJsonOptions.Default),
             PaymentId = saga.PaymentId?.Value,
             PaymentAmount = saga.PaymentAmount?.Amount,
             PaymentCurrency = saga.PaymentAmount?.Currency,

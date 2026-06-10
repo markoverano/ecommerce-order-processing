@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.Messaging;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Commands;
 using ECommerceOrderProcessing.Shared.Domain;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,6 @@ public sealed class SagaCommandPublisher : ISagaCommandPublisher
 {
     private readonly IOutboxEventPublisher _publisher;
     private readonly ILogger<SagaCommandPublisher> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public SagaCommandPublisher(IOutboxEventPublisher publisher, ILogger<SagaCommandPublisher> logger)
     {
@@ -47,7 +43,7 @@ public sealed class SagaCommandPublisher : ISagaCommandPublisher
 
     private async Task PublishCommandAsync<T>(T command, string routingKey, CancellationToken cancellationToken)
     {
-        var eventData = JsonSerializer.Serialize(command, command!.GetType(), _jsonOptions);
+        var eventData = JsonSerializer.Serialize(command, command!.GetType(), InfrastructureJsonOptions.Default);
         await _publisher.PublishAsync(typeof(T).Name, eventData, routingKey, cancellationToken);
 
         _logger.LogDebug("Published command {CommandType} with routing key {RoutingKey}", typeof(T).Name, routingKey);

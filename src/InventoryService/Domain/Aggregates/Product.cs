@@ -29,7 +29,13 @@ public sealed class Product
         };
     }
 
-    // Returns true if reservation succeeded; false if insufficient stock.
+    /// <summary>
+    /// Attempts to reserve the requested quantity. Returns true if reservation succeeded; false if insufficient stock.
+    ///
+    /// This method is not thread-safe for concurrent calls on a single instance. However, at the aggregate level,
+    /// mutations are protected by the StockReservation aggregate's event-sourcing pattern and database-level
+    /// optimistic concurrency (version unique constraint), which prevents lost updates in concurrent scenarios.
+    /// </summary>
     public bool TryReserve(int quantity)
     {
         if (quantity <= 0)

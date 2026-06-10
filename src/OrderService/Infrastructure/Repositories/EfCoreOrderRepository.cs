@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Events.Order;
 using ECommerceOrderProcessing.Shared.Models;
 using ECommerceOrderProcessing.Shared.ValueObjects;
@@ -22,11 +23,6 @@ public sealed class EfCoreOrderRepository : IOrderRepository
     private readonly IOutboxStore _outboxStore;
     private readonly IDistributedCache _cache;
     private readonly ILogger<EfCoreOrderRepository> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCoreOrderRepository(
         OrderDbContext db,
@@ -62,7 +58,7 @@ public sealed class EfCoreOrderRepository : IOrderRepository
         {
             var outboxMessage = OutboxMessage.Create(
                 evt.GetType().Name,
-                JsonSerializer.Serialize(evt, evt.GetType(), _jsonOptions),
+                JsonSerializer.Serialize(evt, evt.GetType(), InfrastructureJsonOptions.Default),
                 GetRoutingKey(evt));
             await _outboxStore.AddAsync(outboxMessage, cancellationToken);
         }
@@ -136,8 +132,8 @@ public sealed class EfCoreOrderRepository : IOrderRepository
             Status = order.Status.ToString(),
             TotalAmount = order.TotalAmount.Amount,
             Currency = order.TotalAmount.Currency,
-            ItemsJson = JsonSerializer.Serialize(itemDtos, _jsonOptions),
-            ShippingAddressJson = JsonSerializer.Serialize(addressDto, _jsonOptions),
+            ItemsJson = JsonSerializer.Serialize(itemDtos, InfrastructureJsonOptions.Default),
+            ShippingAddressJson = JsonSerializer.Serialize(addressDto, InfrastructureJsonOptions.Default),
             CreatedAt = created.Timestamp,
             UpdatedAt = null
         };

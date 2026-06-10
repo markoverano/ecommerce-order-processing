@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using OrderService.Application.DTOs;
@@ -10,11 +11,6 @@ namespace OrderService.Infrastructure.Repositories;
 public sealed class EfCoreOrderReadRepository : IOrderReadRepository
 {
     private readonly OrderDbContext _db;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCoreOrderReadRepository(OrderDbContext db)
     {
@@ -53,9 +49,9 @@ public sealed class EfCoreOrderReadRepository : IOrderReadRepository
 
     private static OrderDto MapToDto(OrderReadModel model)
     {
-        var items = JsonSerializer.Deserialize<List<OrderItemJson>>(model.ItemsJson, _jsonOptions)
+        var items = JsonSerializer.Deserialize<List<OrderItemJson>>(model.ItemsJson, InfrastructureJsonOptions.Default)
             ?? new List<OrderItemJson>();
-        var address = JsonSerializer.Deserialize<ShippingAddressJson>(model.ShippingAddressJson, _jsonOptions)!;
+        var address = JsonSerializer.Deserialize<ShippingAddressJson>(model.ShippingAddressJson, InfrastructureJsonOptions.Default)!;
 
         return new OrderDto(
             model.Id,

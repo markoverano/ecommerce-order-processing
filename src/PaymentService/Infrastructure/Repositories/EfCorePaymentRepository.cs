@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
 using ECommerceOrderProcessing.Shared.Events.Payment;
 using ECommerceOrderProcessing.Shared.ValueObjects;
@@ -19,11 +20,6 @@ public sealed class EfCorePaymentRepository : IPaymentRepository
     private readonly IEventStore _eventStore;
     private readonly IOutboxStore _outboxStore;
     private readonly ILogger<EfCorePaymentRepository> _logger;
-
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public EfCorePaymentRepository(
         PaymentDbContext db,
@@ -60,7 +56,7 @@ public sealed class EfCorePaymentRepository : IPaymentRepository
             {
                 var outboxMessage = OutboxMessage.Create(
                     evt.GetType().Name,
-                    JsonSerializer.Serialize(evt, evt.GetType(), _jsonOptions),
+                    JsonSerializer.Serialize(evt, evt.GetType(), InfrastructureJsonOptions.Default),
                     routingKey);
                 await _outboxStore.AddAsync(outboxMessage, cancellationToken);
             }

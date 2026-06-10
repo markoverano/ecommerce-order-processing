@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PaymentService.Application.Webhooks;
 
@@ -13,11 +14,13 @@ namespace PaymentService.Api.Controllers;
 public sealed class WebhooksController : ControllerBase
 {
     private readonly StripeWebhookHandler _webhookHandler;
+    private readonly ILogger<WebhooksController> _logger;
     private readonly string _webhookSecret;
 
-    public WebhooksController(StripeWebhookHandler webhookHandler, IConfiguration configuration)
+    public WebhooksController(StripeWebhookHandler webhookHandler, ILogger<WebhooksController> logger, IConfiguration configuration)
     {
         _webhookHandler = webhookHandler;
+        _logger = logger;
         _webhookSecret = configuration["Stripe__WebhookSecret"]
             ?? throw new InvalidOperationException("Stripe__WebhookSecret is not configured.");
     }
@@ -36,7 +39,7 @@ public sealed class WebhooksController : ControllerBase
             return Unauthorized();
         }
 
-        var (webhookId, eventType, chargeId, failureMessage) = ParseStripePayload(payload);
+        var (webhookId, eventType, chargeId, failureMessage) = ParseStripePayload(payload, _logger);
         if (webhookId is null || eventType is null || chargeId is null)
             return BadRequest("Unrecognised Stripe event structure.");
 
@@ -71,7 +74,7 @@ public sealed class WebhooksController : ControllerBase
     }
 
     // Minimal JSON parsing to avoid taking a Stripe SDK dependency in the API project.
-    private static (string? Id, string? Type, string? ChargeId, string? FailureMessage) ParseStripePayload(string payload)
+    private static (string? Id, string? Type, string? ChargeId, string? FailureMessage) ParseStripePayload(string payload, ILogger<WebhooksController> logger)
     {
         try
         {
@@ -92,8 +95,14 @@ public sealed class WebhooksController : ControllerBase
 
             return (id, type, chargeId, failureMessage);
         }
-        catch
+        catch (System.Text.Json.JsonException ex)
         {
+            logger.LogWarning(ex, "Failed to deserialize Stripe webhook payload; request rejected");
+            return (null, null, null, null);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error parsing Stripe webhook payload");
             return (null, null, null, null);
         }
     }
