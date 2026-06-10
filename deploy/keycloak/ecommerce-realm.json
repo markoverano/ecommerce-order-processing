@@ -1,0 +1,146 @@
+{
+  "realm": "ecommerce",
+  "enabled": true,
+  "displayName": "E-Commerce Order Processing",
+  "accessTokenLifespan": 900,
+  "ssoSessionMaxLifespan": 3600,
+  "ssoSessionIdleTimeout": 900,
+  "roles": {
+    "realm": [
+      { "name": "customer", "description": "Regular customer role — access to own orders, payments, shipments" },
+      { "name": "admin", "description": "Admin role — access to all resources and admin endpoints" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "frontend-app",
+      "name": "Frontend Application",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:3000", "http://localhost:5173"],
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    },
+    {
+      "clientId": "api-gateway",
+      "name": "API Gateway (Kong)",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_openssl_rand_base64_32",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "order-service",
+      "name": "Order Service",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_order_service",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "payment-service",
+      "name": "Payment Service",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_payment_service",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "inventory-service",
+      "name": "Inventory Service",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_inventory_service",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "shipping-service",
+      "name": "Shipping Service",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_shipping_service",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "notification-service",
+      "name": "Notification Service",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_notification_service",
+      "defaultClientScopes": ["openid", "roles"]
+    },
+    {
+      "clientId": "saga-orchestrator",
+      "name": "Saga Orchestrator",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET_saga_orchestrator",
+      "defaultClientScopes": ["openid", "roles"]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true" },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "customer@example.com",
+      "email": "customer@example.com",
+      "firstName": "Test",
+      "lastName": "Customer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "Test1234!", "temporary": false }
+      ],
+      "realmRoles": ["customer"]
+    },
+    {
+      "username": "admin@example.com",
+      "email": "admin@example.com",
+      "firstName": "Test",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "Admin1234!", "temporary": false }
+      ],
+      "realmRoles": ["admin"]
+    }
+  ]
+}

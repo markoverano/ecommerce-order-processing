@@ -1,0 +1,230 @@
+_format_version: "3.0"
+_transform: true
+
+# Global plugins — applied to every proxied request regardless of route
+plugins:
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid#counter
+      echo_downstream: true
+
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Frame-Options: DENY"
+          - "X-Content-Type-Options: nosniff"
+          - "Strict-Transport-Security: max-age=31536000; includeSubDomains"
+          - "Content-Security-Policy: default-src 'self'"
+          - "Referrer-Policy: strict-origin-when-cross-origin"
+
+services:
+
+  # ── Order Service ────────────────────────────────────────────────────────────
+  - name: order-service
+    url: http://order-service:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: orders-api
+        paths:
+          - /api/v1/orders
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              # Replace with KEYCLOAK_OIDC_CLIENT_SECRET from .env
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+
+  # ── Payment Service ──────────────────────────────────────────────────────────
+  - name: payment-service
+    url: http://payment-service:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: payments-api
+        paths:
+          - /api/v1/payments
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+      # Stripe delivers webhooks directly; HMAC is verified inside the service — no OIDC
+      - name: stripe-webhook
+        paths:
+          - /api/v1/webhooks/stripe
+        methods:
+          - POST
+        strip_path: false
+
+  # ── Inventory Service ────────────────────────────────────────────────────────
+  - name: inventory-service
+    url: http://inventory-service:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: inventory-api
+        paths:
+          - /api/v1/inventory
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+
+  # ── Shipping Service ─────────────────────────────────────────────────────────
+  - name: shipping-service
+    url: http://shipping-service:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: shipments-api
+        paths:
+          - /api/v1/shipments
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+      # FedEx delivers webhooks directly; HMAC is verified inside the service — no OIDC
+      - name: fedex-webhook
+        paths:
+          - /api/v1/webhooks/fedex
+        methods:
+          - POST
+        strip_path: false
+
+  # ── Notification Service ─────────────────────────────────────────────────────
+  - name: notification-service
+    url: http://notification-service:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: notifications-api
+        paths:
+          - /api/v1/notifications
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+      - name: mailgun-webhook
+        paths:
+          - /api/v1/webhooks/mailgun
+        methods:
+          - POST
+        strip_path: false
+      - name: twilio-webhook
+        paths:
+          - /api/v1/webhooks/twilio
+        methods:
+          - POST
+        strip_path: false
+
+  # ── Saga Orchestrator ────────────────────────────────────────────────────────
+  - name: saga-orchestrator
+    url: http://saga-orchestrator:8080
+    connect_timeout: 10000
+    read_timeout: 30000
+    write_timeout: 30000
+    routes:
+      - name: sagas-api
+        paths:
+          - /api/v1/sagas
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip
+      - name: admin-api
+        paths:
+          - /api/v1/admin
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/ecommerce/.well-known/openid-configuration
+              client_id: api-gateway
+              client_secret: changeme-replace-with-KEYCLOAK_OIDC_CLIENT_SECRET
+              auth_methods:
+                - bearer
+              bearer_token_param_type:
+                - header
+          - name: rate-limiting
+            config:
+              minute: 1000
+              policy: local
+              limit_by: ip

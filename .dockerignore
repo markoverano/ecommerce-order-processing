@@ -1,0 +1,10 @@
+﻿**/.vs
+**/.git
+**/bin
+**/obj
+**/*.user
+**/Thumbs.db
+deploy/
+docs/
+tests/
+*.md

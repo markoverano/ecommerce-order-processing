@@ -1,0 +1,133 @@
+# Kong runs in DB-less mode. The declarative config is loaded from the kong-config
+# ConfigMap, which deploy.sh creates from deploy/kong/kong.yml before applying this manifest.
+#
+# Apply order: run deploy.sh (it creates the ConfigMap first), then kubectl apply -f kong.yaml.
+# Or manually: kubectl create configmap kong-config \
+#   --from-file=kong.yml=deploy/kong/kong.yml -n ecommerce-prod --dry-run=client -o yaml | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+  namespace: ecommerce-prod
+  labels:
+    app: kong
+    app.kubernetes.io/name: kong
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kong
+  template:
+    metadata:
+      labels:
+        app: kong
+        app.kubernetes.io/name: kong
+        app.kubernetes.io/part-of: ecommerce
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: kong
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: kong
+          image: kong:3.7
+          ports:
+            - containerPort: 8000
+              name: proxy
+            - containerPort: 8001
+              name: admin
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /etc/kong/kong.yml
+            - name: KONG_PROXY_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_ADMIN_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_PROXY_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_LISTEN
+              value: "0.0.0.0:8001"
+          volumeMounts:
+            - name: kong-config
+              mountPath: /etc/kong
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: [kong, health]
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+      volumes:
+        - name: kong-config
+          configMap:
+            name: kong-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  namespace: ecommerce-prod
+  labels:
+    app: kong
+    app.kubernetes.io/part-of: ecommerce
+spec:
+  selector:
+    app: kong
+  ports:
+    - name: proxy
+      port: 80
+      targetPort: 8000
+    - name: proxy-tls
+      port: 443
+      targetPort: 8443
+---
+# Routes external traffic to Kong via the cluster Ingress controller (e.g., nginx-ingress).
+# Enable the ingress addon first: minikube addons enable ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kong-ingress
+  namespace: ecommerce-prod
+  labels:
+    app: kong
+    app.kubernetes.io/part-of: ecommerce
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong
+                port:
+                  number: 80

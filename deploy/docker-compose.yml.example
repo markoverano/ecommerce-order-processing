@@ -19,8 +19,16 @@ services:
   # ── Cache ───────────────────────────────────────────────────────────────────
 
   # ── Tracing ─────────────────────────────────────────────────────────────────
+  # jaeger: Jaeger all-in-one with OTLP enabled (ports 4317 gRPC, 4318 HTTP, 16686 UI)
+
+  # ── Logging ──────────────────────────────────────────────────────────────────
+  # elasticsearch: single-node, xpack.security.enabled=false for local dev
+  # kibana: connects to elasticsearch for log exploration
 
   # ── Metrics ─────────────────────────────────────────────────────────────────
+  # prometheus: scrapes /metrics from all 6 services + RabbitMQ plugin (15692)
+  # alertmanager: receives fired alerts from Prometheus on :9093
+  # grafana: dashboards auto-provisioned from deploy/grafana/provisioning/
 
   # ── Services ─────────────────────────────────────────────────────────────────
   # Each service builds from the local Dockerfile. All env vars pull from .env.

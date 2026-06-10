@@ -1,0 +1,39 @@
+name: Dependency Security Scan
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Every Monday at 06:00 UTC
+  push:
+    paths:
+      - "**/*.csproj"
+      - "**/Directory.Packages.props"
+  pull_request:
+    paths:
+      - "**/*.csproj"
+      - "**/Directory.Packages.props"
+
+jobs:
+  nuget-audit:
+    name: NuGet Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore packages
+        run: dotnet restore ECommerceOrderProcessing.sln
+
+      - name: Audit NuGet packages for known vulnerabilities
+        run: dotnet list ECommerceOrderProcessing.sln package --vulnerable --include-transitive 2>&1 | tee audit-results.txt; grep -q "has no vulnerable packages" audit-results.txt
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-audit-results
+          path: audit-results.txt
+          retention-days: 30

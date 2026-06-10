@@ -1,0 +1,67 @@
+# Prometheus alerting rules — copy to alerting-rules.yml.
+# Covers: p99 latency, HTTP error rate, circuit breaker state, saga compensation rate.
+
+groups:
+  - name: ecommerce-latency
+    rules:
+      - alert: HighP99Latency
+        expr: >
+          histogram_quantile(0.99,
+            sum by (le, job) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency exceeds 5s on {{ $labels.job }}"
+          description: "P99 HTTP latency is {{ $value | humanizeDuration }} on {{ $labels.job }}."
+
+  - name: ecommerce-errors
+    rules:
+      - alert: HighErrorRate
+        expr: >
+          sum by (job) (rate(http_requests_received_total{code=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_received_total[5m]))
+          > 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP error rate > 1% on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.job }}."
+
+  - name: ecommerce-circuit-breaker
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker OPEN on {{ $labels.service }}"
+          description: "Polly circuit breaker for {{ $labels.service }} is open — external calls fast-failing."
+
+      - alert: CircuitBreakerHalfOpen
+        expr: circuit_breaker_state == 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker HALF-OPEN on {{ $labels.service }}"
+          description: "Circuit breaker for {{ $labels.service }} is probing after recovery."
+
+  - name: ecommerce-saga
+    rules:
+      - alert: HighSagaCompensationRate
+        expr: >
+          sum(rate(sagas_compensated_total[10m]))
+          /
+          sum(rate(sagas_started_total[10m]))
+          > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Saga compensation rate exceeds 10%"
+          description: "More than 10% of sagas are being compensated in the last 10 minutes."

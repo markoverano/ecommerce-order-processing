@@ -1,7 +1,16 @@
 # Prometheus scrapes each service's /metrics endpoint every 15 seconds.
+# alerting-rules.yml is loaded automatically; alertmanager receives fired alerts on :9093.
 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - "/etc/prometheus/alerting-rules.yml"
 
 scrape_configs:

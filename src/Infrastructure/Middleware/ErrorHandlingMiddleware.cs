@@ -43,9 +43,9 @@ public sealed class ErrorHandlingMiddleware
 
         var (statusCode, code) = exception switch
         {
-            ArgumentException => (HttpStatusCode.BadRequest, "BAD_REQUEST"),
-            KeyNotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND"),
-            InvalidOperationException => (HttpStatusCode.Conflict, "CONFLICT"),
+            ArgumentException => (HttpStatusCode.BadRequest, "VALIDATION_FAILED"),
+            KeyNotFoundException => (HttpStatusCode.NotFound, "RESOURCE_NOT_FOUND"),
+            InvalidOperationException => (HttpStatusCode.Conflict, "BUSINESS_RULE_VIOLATION"),
             _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR")
         };
 

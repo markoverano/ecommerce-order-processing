@@ -1,0 +1,72 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/ecommerce
+
+jobs:
+  build-and-push:
+    name: Build and push Docker images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - name: order-service
+            context: src/OrderService/Api
+            dockerfile: src/OrderService/Api/Dockerfile
+          - name: payment-service
+            context: src/PaymentService/Api
+            dockerfile: src/PaymentService/Api/Dockerfile
+          - name: inventory-service
+            context: src/InventoryService/Api
+            dockerfile: src/InventoryService/Api/Dockerfile
+          - name: shipping-service
+            context: src/ShippingService/Api
+            dockerfile: src/ShippingService/Api/Dockerfile
+          - name: notification-service
+            context: src/NotificationService/Api
+            dockerfile: src/NotificationService/Api/Dockerfile
+          - name: saga-orchestrator
+            context: src/SagaOrchestrator/Api
+            dockerfile: src/SagaOrchestrator/Api/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service.name }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}

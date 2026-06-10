@@ -1,0 +1,98 @@
+# docker-compose.asb.yml — opt-in Azure Service Bus emulator overlay
+#
+# Adds the Microsoft ASB emulator (backed by SQL Server) for local failover testing.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.asb.yml up
+#
+# The emulator exposes port 5672 (AMQP). Services connect using the connection string:
+#   Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+# Set AZURE_SERVICE_BUS_CONNECTION_STRING in .env (replace SAS_KEY_VALUE with the key
+# printed by the emulator container on first start, or use the default from asb-emulator-config.json).
+
+version: "3.9"
+
+volumes:
+  mssql_data:
+
+services:
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql
+    networks: [ecommerce]
+    environment:
+      SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Emulator_Dev_Pass!1}
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -Q 'SELECT 1' -No || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    container_name: servicebus-emulator
+    networks: [ecommerce]
+    ports:
+      - "5673:5672"  # mapped to 5673 on host to avoid conflict with RabbitMQ on 5672
+    environment:
+      ACCEPT_EULA: "Y"
+      SQL_SERVER: mssql
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Emulator_Dev_Pass!1}
+    volumes:
+      - ./scripts/asb-emulator-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    depends_on:
+      mssql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:5300/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Override each service to inject the ASB connection string for HybridPublisher fallback
+  order-service:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
+
+  payment-service:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
+
+  inventory-service:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
+
+  shipping-service:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
+
+  notification-service:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
+
+  saga-orchestrator:
+    environment:
+      AzureServiceBus__ConnectionString: ${AZURE_SERVICE_BUS_CONNECTION_STRING}
+    depends_on:
+      servicebus-emulator:
+        condition: service_healthy
