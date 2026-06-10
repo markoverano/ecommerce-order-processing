@@ -1,0 +1,540 @@
+version: "3.9"
+
+# Four isolated networks enforce least-privilege container communication.
+# ecommerce-api     : external-facing proxying and OIDC (Kong + Keycloak + services)
+# ecommerce-db      : database and cache tier (Postgres + Redis + services)
+# ecommerce-messaging: broker tier (RabbitMQ + services)
+# ecommerce-observability: telemetry tier (Jaeger + Prometheus + Grafana + ES + Kibana + services)
+networks:
+  ecommerce-api:
+    driver: bridge
+  ecommerce-db:
+    driver: bridge
+  ecommerce-messaging:
+    driver: bridge
+  ecommerce-observability:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+  keycloak_data:
+
+services:
+
+  # ── Identity Provider ────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24
+    container_name: keycloak
+    networks: [ecommerce-api]
+    ports:
+      - "8080:8080"
+    environment:
+      KC_DB: dev-file
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/ecommerce-realm.json:/opt/keycloak/data/import/ecommerce-realm.json:ro
+    command: start-dev --import-realm
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/ecommerce || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
+  # ── Message Broker ─────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    networks: [ecommerce-messaging]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Database ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    networks: [ecommerce-db]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Cache ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    networks: [ecommerce-db]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Tracing ─────────────────────────────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    networks: [ecommerce-observability]
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # ── Logging ──────────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    container_name: elasticsearch
+    networks: [ecommerce-observability]
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  kibana:
+    image: kibana:8.13.4
+    container_name: kibana
+    networks: [ecommerce-observability]
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+      ELASTICSEARCH_USERNAME: "elastic"
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ── Metrics ─────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    networks: [ecommerce-observability]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerting-rules.yml:/etc/prometheus/alerting-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    networks: [ecommerce-observability]
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    depends_on: [prometheus]
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    networks: [ecommerce-observability]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    depends_on: [prometheus]
+
+  # ── Services ─────────────────────────────────────────────────────────────────
+  order-service:
+    build:
+      context: ..
+      dockerfile: src/OrderService/Api/Dockerfile
+    container_name: order-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__OrdersDb: "Host=postgres;Port=5432;Database=orders_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Redis__ConnectionString: "redis:6379"
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      # Set to "true" when Keycloak is exposed over HTTPS in production.
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: ..
+      dockerfile: src/PaymentService/Api/Dockerfile
+    container_name: payment-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5002:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__PaymentsDb: "Host=postgres;Port=5432;Database=payments_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET}
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  inventory-service:
+    build:
+      context: ..
+      dockerfile: src/InventoryService/Api/Dockerfile
+    container_name: inventory-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5003:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__InventoryDb: "Host=postgres;Port=5432;Database=inventory_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  shipping-service:
+    build:
+      context: ..
+      dockerfile: src/ShippingService/Api/Dockerfile
+    container_name: shipping-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5004:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__ShippingDb: "Host=postgres;Port=5432;Database=shipping_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      FedEx__ApiKey: ${FEDEX_API_KEY}
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: src/NotificationService/Api/Dockerfile
+    container_name: notification-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5005:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__NotificationsDb: "Host=postgres;Port=5432;Database=notifications_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Mailgun__ApiKey: ${MAILGUN_API_KEY}
+      Mailgun__Domain: ${MAILGUN_DOMAIN}
+      Twilio__AccountSid: ${TWILIO_ACCOUNT_SID}
+      Twilio__AuthToken: ${TWILIO_AUTH_TOKEN}
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  saga-orchestrator:
+    build:
+      context: ..
+      dockerfile: src/SagaOrchestrator/Api/Dockerfile
+    container_name: saga-orchestrator
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5007:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__SagaDb: "Host=postgres;Port=5432;Database=saga_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  # ── API Gateway ──────────────────────────────────────────────────────────────
+  # DB-less mode: config is loaded entirely from kong/kong.yml at startup.
+  # Admin API is restricted to localhost — never expose 0.0.0.0:8001 in production.
+  kong:
+    image: kong:3.7
+    container_name: kong
+    networks: [ecommerce-api]
+    ports:
+      - "8000:8000"
+      - "127.0.0.1:8001:8001"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "127.0.0.1:8001"
+    volumes:
+      - ./kong/kong.yml:/etc/kong/kong.yml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - order-service
+      - payment-service
+      - inventory-service
+      - shipping-service
+      - notification-service
+      - saga-orchestrator
