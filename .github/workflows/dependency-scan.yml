@@ -1,16 +1,16 @@
 name: Dependency Security Scan
 
-on:
-  schedule:
-    - cron: "0 6 * * 1"  # Every Monday at 06:00 UTC
-  push:
-    paths:
-      - "**/*.csproj"
-      - "**/Directory.Packages.props"
-  pull_request:
-    paths:
-      - "**/*.csproj"
-      - "**/Directory.Packages.props"
+# on:
+#   schedule:
+#     - cron: "0 6 * * 1"  # Every Monday at 06:00 UTC
+#   push:
+#     paths:
+#       - "**/*.csproj"
+#       - "**/Directory.Packages.props"
+#   pull_request:
+#     paths:
+#       - "**/*.csproj"
+#       - "**/Directory.Packages.props"
 
 jobs:
   nuget-audit:
