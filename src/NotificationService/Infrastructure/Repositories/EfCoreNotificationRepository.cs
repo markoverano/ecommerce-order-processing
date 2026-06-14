@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
@@ -71,12 +72,9 @@ public sealed class EfCoreNotificationRepository : INotificationRepository
         _logger.LogDebug("Saved notification {NotificationId}, version {Version}", notification.NotificationId, notification.Version);
     }
 
-    // NotificationQueued is internal; downstream saga only consumes NotificationSent/Failed.
     private static string? GetRoutingKey(DomainEvent evt) => evt switch
     {
-        NotificationSent => "notification.sent",
-        NotificationFailed => "notification.failed",
-        NotificationDelivered => "notification.delivered",
+        NotificationSent or NotificationFailed or NotificationDelivered => RoutingKeyBuilder.Build(evt),
         _ => null
     };
 

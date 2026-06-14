@@ -16,7 +16,7 @@ public sealed class PaymentFailedHandler : SagaEventHandlerBase<PaymentFailed>
 
     protected override async Task HandleAsync(PaymentFailed evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         saga.OnPaymentFailed(evt.Reason, evt.CorrelationId);
         await Repository.SaveAsync(saga, cancellationToken);

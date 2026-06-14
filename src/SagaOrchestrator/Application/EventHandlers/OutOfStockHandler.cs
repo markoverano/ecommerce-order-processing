@@ -16,7 +16,7 @@ public sealed class OutOfStockHandler : SagaEventHandlerBase<OutOfStock>
 
     protected override async Task HandleAsync(OutOfStock evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         var reason = $"Product {evt.ProductId} out of stock (requested {evt.RequestedQuantity}, available {evt.AvailableQuantity}).";
         saga.OnOutOfStock(reason, evt.CorrelationId);

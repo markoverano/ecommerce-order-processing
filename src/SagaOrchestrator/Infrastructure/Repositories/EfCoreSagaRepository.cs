@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Events.Saga;
@@ -80,14 +81,8 @@ public sealed class EfCoreSagaRepository : ISagaRepository
         _logger.LogDebug("Saved saga {SagaId} for order {OrderId}, version {Version}", saga.Id, saga.OrderId, saga.Version);
     }
 
-    private static string GetRoutingKey(ECommerceOrderProcessing.Shared.Domain.DomainEvent evt) => evt switch
-    {
-        SagaStarted => "saga.started",
-        SagaStepCompleted => "saga.step-completed",
-        SagaCompleted => "saga.completed",
-        SagaCompensated => "saga.compensated",
-        _ => $"saga.{evt.GetType().Name.ToLowerInvariant()}"
-    };
+    private static string GetRoutingKey(ECommerceOrderProcessing.Shared.Domain.DomainEvent evt) =>
+        RoutingKeyBuilder.Build(evt);
 
     private static OrderProcessingSaga MapToDomain(SagaState state)
     {

@@ -16,16 +16,16 @@ public sealed class SagaEventConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "order.created",
-        "payment.processed",
-        "payment.failed",
-        "payment.refunded",
-        "inventory.stock-reserved",
-        "inventory.out-of-stock",
-        "inventory.stock-released",
-        "shipping.shipment-created",
-        "shipping.shipment-failed",
-        "notification.notification-sent"
+        "order.*.created",
+        "payment.*.processed",
+        "payment.*.failed",
+        "payment.*.refunded",
+        "inventory.*.reserved",
+        "inventory.*.out-of-stock",
+        "inventory.*.released",
+        "shipping.*.created",
+        "shipping.*.failed",
+        "notification.*.sent"
     };
 
     public SagaEventConsumer(

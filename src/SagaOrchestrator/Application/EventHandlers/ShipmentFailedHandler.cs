@@ -16,7 +16,7 @@ public sealed class ShipmentFailedHandler : SagaEventHandlerBase<ShipmentFailed>
 
     protected override async Task HandleAsync(ShipmentFailed evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         saga.OnShipmentFailed(evt.Reason, evt.CorrelationId);
         await Repository.SaveAsync(saga, cancellationToken);

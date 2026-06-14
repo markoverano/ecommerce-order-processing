@@ -17,7 +17,7 @@ public sealed class StockReleasedHandler : SagaEventHandlerBase<StockReleased>
 
     protected override async Task HandleAsync(StockReleased evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         // StockReleased during compensation (ShipmentFailed path) — refund payment next.
         if (saga.Status != SagaStatus.Compensating || saga.CurrentStep != SagaStep.InventoryCompensation)

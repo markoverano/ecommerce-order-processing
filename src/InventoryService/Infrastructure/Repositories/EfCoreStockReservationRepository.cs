@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Commands;
@@ -110,7 +111,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                 return (
                     nameof(StockReserved),
                     JsonSerializer.Serialize(sharedEvent, typeof(StockReserved), InfrastructureJsonOptions.Default),
-                    "inventory.stock-reserved");
+                    RoutingKeyBuilder.Build(sharedEvent));
             }
 
             case StockReservationFailed e:
@@ -122,7 +123,7 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                 return (
                     nameof(OutOfStock),
                     JsonSerializer.Serialize(sharedEvent, typeof(OutOfStock), InfrastructureJsonOptions.Default),
-                    "inventory.out-of-stock");
+                    RoutingKeyBuilder.Build(sharedEvent));
             }
 
             case StockReservationReleased e:
@@ -131,10 +132,9 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
                 return (
                     nameof(StockReleased),
                     JsonSerializer.Serialize(sharedEvent, typeof(StockReleased), InfrastructureJsonOptions.Default),
-                    "inventory.stock-released");
+                    RoutingKeyBuilder.Build(sharedEvent));
             }
 
-            // Expiry is internal — no downstream notification required.
             default:
                 return (evt.GetType().Name, string.Empty, null);
         }

@@ -20,8 +20,8 @@ public sealed class PaymentCommandConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "command.process-payment",
-        "command.refund-payment"
+        "command.process-payment.*",
+        "command.refund-payment.*"
     };
 
     public PaymentCommandConsumer(

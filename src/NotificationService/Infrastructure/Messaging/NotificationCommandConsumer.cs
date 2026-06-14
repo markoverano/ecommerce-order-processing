@@ -20,7 +20,7 @@ public sealed class NotificationCommandConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "command.notify-customer"
+        "command.notify-customer.*"
     };
 
     public NotificationCommandConsumer(

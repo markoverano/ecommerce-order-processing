@@ -17,7 +17,7 @@ public sealed class StockReservedHandler : SagaEventHandlerBase<StockReserved>
 
     protected override async Task HandleAsync(StockReserved evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         saga.OnStockReserved(evt.ReservationId, evt.CorrelationId);
         await Repository.SaveAsync(saga, cancellationToken);

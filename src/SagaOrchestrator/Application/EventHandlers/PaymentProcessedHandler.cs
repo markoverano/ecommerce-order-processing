@@ -17,7 +17,7 @@ public sealed class PaymentProcessedHandler : SagaEventHandlerBase<PaymentProces
 
     protected override async Task HandleAsync(PaymentProcessed evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         saga.OnPaymentProcessed(evt.PaymentId, evt.Amount, evt.CorrelationId);
         await Repository.SaveAsync(saga, cancellationToken);

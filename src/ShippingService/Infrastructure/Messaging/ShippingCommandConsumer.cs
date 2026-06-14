@@ -20,8 +20,8 @@ public sealed class ShippingCommandConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "command.create-shipment",
-        "command.cancel-shipment"
+        "command.create-shipment.*",
+        "command.cancel-shipment.*"
     };
 
     public ShippingCommandConsumer(

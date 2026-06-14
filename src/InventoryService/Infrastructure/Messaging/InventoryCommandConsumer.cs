@@ -19,8 +19,8 @@ public sealed class InventoryCommandConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "command.reserve-stock",
-        "command.release-stock"
+        "command.reserve-stock.*",
+        "command.release-stock.*"
     };
 
     public InventoryCommandConsumer(

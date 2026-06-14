@@ -19,9 +19,9 @@ public sealed class OrderEventConsumer : MessageConsumerBase
 
     protected override IReadOnlyList<string> RoutingKeys => new[]
     {
-        "order.confirmed",
-        "order.failed",
-        "order.compensated"
+        "order.*.confirmed",
+        "order.*.failed",
+        "order.*.compensated"
     };
 
     public OrderEventConsumer(IConnection connection, IServiceScopeFactory scopeFactory, ILogger<OrderEventConsumer> logger)

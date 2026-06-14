@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
@@ -71,14 +72,9 @@ public sealed class EfCoreShipmentRepository : IShipmentRepository
         _logger.LogDebug("Saved shipment {ShipmentId}, version {Version}", shipment.ShipmentId, shipment.Version);
     }
 
-    // ShipmentBooked is internal; downstream saga only consumes ShipmentCreated/Failed/Cancelled.
     private static string? GetRoutingKey(DomainEvent evt) => evt switch
     {
-        ShipmentCreated => "shipment.created",
-        ShipmentFailed => "shipment.failed",
-        ShipmentDispatched => "shipment.dispatched",
-        DeliveryConfirmed => "shipment.delivered",
-        ShipmentCancelled => "shipment.cancelled",
+        ShipmentCreated or ShipmentFailed or ShipmentDispatched or DeliveryConfirmed or ShipmentCancelled => RoutingKeyBuilder.Build(evt),
         _ => null
     };
 

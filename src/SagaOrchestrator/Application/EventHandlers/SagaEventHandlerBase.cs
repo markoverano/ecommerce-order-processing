@@ -14,6 +14,7 @@ public abstract class SagaEventHandlerBase<TEvent> : ISagaEventHandler
     protected readonly ISagaRepository Repository;
     protected readonly ISagaCommandPublisher CommandPublisher;
     protected readonly ILogger Logger;
+    private readonly SagaEventValidator _validator = new();
 
     protected SagaEventHandlerBase(ISagaRepository repository, ISagaCommandPublisher commandPublisher, ILogger logger)
     {
@@ -29,6 +30,17 @@ public abstract class SagaEventHandlerBase<TEvent> : ISagaEventHandler
         => HandleAsync((TEvent)evt, cancellationToken);
 
     protected abstract Task HandleAsync(TEvent evt, CancellationToken cancellationToken);
+
+    protected async Task<OrderProcessingSaga> LoadSagaOrThrowAsync(OrderId orderId, DomainEvent evt, CancellationToken cancellationToken)
+    {
+        var saga = await Repository.GetByOrderIdAsync(orderId, cancellationToken)
+            ?? throw new SagaNotFoundException(orderId.Value);
+
+        _validator.ValidateAggregateId(evt, saga);
+        _validator.ValidateCorrelationId(evt, saga);
+
+        return saga;
+    }
 
     protected async Task<OrderProcessingSaga> LoadSagaOrThrowAsync(OrderId orderId, CancellationToken cancellationToken) =>
         await Repository.GetByOrderIdAsync(orderId, cancellationToken)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Events.Order;
@@ -74,14 +75,8 @@ public sealed class EfCoreOrderRepository : IOrderRepository
         _logger.LogDebug("Saved order {OrderId}, version {Version}", order.OrderId, order.Version);
     }
 
-    private static string GetRoutingKey(ECommerceOrderProcessing.Shared.Domain.DomainEvent evt) => evt switch
-    {
-        OrderCreated => "order.created",
-        OrderConfirmed => "order.confirmed",
-        OrderFailed => "order.failed",
-        OrderCompensated => "order.compensated",
-        _ => $"order.{evt.GetType().Name.ToLowerInvariant()}"
-    };
+    private static string GetRoutingKey(ECommerceOrderProcessing.Shared.Domain.DomainEvent evt) =>
+        RoutingKeyBuilder.Build(evt);
 
     private async Task UpdateViewModelAsync(
         Order order,

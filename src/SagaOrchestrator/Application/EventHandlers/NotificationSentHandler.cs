@@ -16,7 +16,7 @@ public sealed class NotificationSentHandler : SagaEventHandlerBase<NotificationS
 
     protected override async Task HandleAsync(NotificationSent evt, CancellationToken cancellationToken)
     {
-        var saga = await LoadSagaOrThrowAsync(evt.OrderId, cancellationToken);
+        var saga = await LoadSagaOrThrowAsync(evt.OrderId, evt, cancellationToken);
 
         saga.OnNotificationSent(evt.CorrelationId);
         await Repository.SaveAsync(saga, cancellationToken);

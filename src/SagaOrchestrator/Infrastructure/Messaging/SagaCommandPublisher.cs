@@ -24,22 +24,22 @@ public sealed class SagaCommandPublisher : ISagaCommandPublisher
     }
 
     public Task PublishProcessPaymentAsync(ProcessPaymentCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.process-payment", cancellationToken);
+        PublishCommandAsync(command, $"command.process-payment.{command.OrderId.Value:N}", cancellationToken);
 
     public Task PublishReserveStockAsync(ReserveStockCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.reserve-stock", cancellationToken);
+        PublishCommandAsync(command, $"command.reserve-stock.{command.OrderId.Value:N}", cancellationToken);
 
     public Task PublishCreateShipmentAsync(CreateShipmentCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.create-shipment", cancellationToken);
+        PublishCommandAsync(command, $"command.create-shipment.{command.OrderId.Value:N}", cancellationToken);
 
     public Task PublishNotifyCustomerAsync(NotifyCustomerCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.notify-customer", cancellationToken);
+        PublishCommandAsync(command, $"command.notify-customer.{command.OrderId.Value:N}", cancellationToken);
 
     public Task PublishRefundPaymentAsync(RefundPaymentCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.refund-payment", cancellationToken);
+        PublishCommandAsync(command, $"command.refund-payment.{command.OrderId.Value:N}", cancellationToken);
 
     public Task PublishReleaseStockAsync(ReleaseStockCommand command, CancellationToken cancellationToken = default) =>
-        PublishCommandAsync(command, "command.release-stock", cancellationToken);
+        PublishCommandAsync(command, $"command.release-stock.{command.OrderId.Value:N}", cancellationToken);
 
     private async Task PublishCommandAsync<T>(T command, string routingKey, CancellationToken cancellationToken)
     {

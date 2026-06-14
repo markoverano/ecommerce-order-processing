@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerceOrderProcessing.Infrastructure.EventStore;
+using ECommerceOrderProcessing.Infrastructure.Messaging;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Serialization;
 using ECommerceOrderProcessing.Shared.Domain;
@@ -71,12 +72,9 @@ public sealed class EfCorePaymentRepository : IPaymentRepository
         _logger.LogDebug("Saved payment {PaymentId}, version {Version}", payment.PaymentId, payment.Version);
     }
 
-    // PaymentInitiated is internal to this service; downstream sagas only consume PaymentProcessed/Failed/Refunded.
     private static string? GetRoutingKey(DomainEvent evt) => evt switch
     {
-        PaymentProcessed => "payment.processed",
-        PaymentFailed => "payment.failed",
-        PaymentRefunded => "payment.refunded",
+        PaymentProcessed or PaymentFailed or PaymentRefunded => RoutingKeyBuilder.Build(evt),
         _ => null
     };
 
