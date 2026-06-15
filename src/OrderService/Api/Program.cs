@@ -9,6 +9,8 @@ using ECommerceOrderProcessing.Infrastructure.Messaging.RabbitMq;
 using ECommerceOrderProcessing.Infrastructure.Middleware;
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
 using ECommerceOrderProcessing.Infrastructure.Persistence;
+using ECommerceOrderProcessing.Infrastructure.RateLimiting;
+using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
@@ -95,6 +97,11 @@ try
         opts.InstanceName = "order-service:";
     });
     builder.Services.AddScoped<IGlobalIdempotencyStore, RedisGlobalIdempotencyStore>();
+
+    builder.Services.AddScoped<ISnapshotStore, EfCoreSnapshotStore<OrderDbContext>>();
+
+    builder.Services.AddSingleton<IExceptionMapper, DefaultExceptionMapper>();
+    builder.Services.Configure<RateLimitingOptions>(config.GetSection(RateLimitingOptions.SectionName));
 
     builder.Services.AddMediatR(cfg =>
     {
@@ -187,6 +194,7 @@ try
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseMiddleware<ErrorHandlingMiddleware>();
     app.UseMiddleware<LoggingMiddleware>();
+    app.UseMiddleware<RateLimitingMiddleware>();
     app.UseMiddleware<IdempotencyMiddleware>();
 
     app.UseRouting();
