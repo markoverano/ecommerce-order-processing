@@ -42,7 +42,29 @@ public sealed class GlobalIdempotencyBehavior<TRequest, TResponse> : IPipelineBe
             _logger.LogDebug(
                 "Idempotency cache hit for {CommandType} key={Key}; returning cached response",
                 typeof(TRequest).Name, key);
-            return JsonSerializer.Deserialize<TResponse>(cached)!;
+
+            TResponse? deserialized;
+            try
+            {
+                deserialized = JsonSerializer.Deserialize<TResponse>(cached);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to deserialize cached idempotency response for {CommandType}; processing request fresh",
+                    typeof(TRequest).Name);
+                return await next();
+            }
+
+            if (deserialized is null)
+            {
+                _logger.LogWarning(
+                    "Cached idempotency response for {CommandType} deserialized to null; processing request fresh",
+                    typeof(TRequest).Name);
+                return await next();
+            }
+
+            return deserialized;
         }
 
         var response = await next();
