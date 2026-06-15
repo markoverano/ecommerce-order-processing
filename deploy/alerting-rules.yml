@@ -62,3 +62,84 @@ groups:
         annotations:
           summary: "Saga compensation rate exceeds 10%"
           description: "More than 10% of sagas are being compensated in the last 10 minutes."
+
+      - alert: SagaStuckRunning
+        expr: >
+          sum by (saga_id) (
+            time() - saga_started_timestamp_seconds{status="Running"}
+          ) > 3600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Saga {{ $labels.saga_id }} stuck in Running state > 1 hour"
+          description: "Saga {{ $labels.saga_id }} has been in Running state for {{ $value | humanizeDuration }}. Possible deadlock or lost message."
+
+  - name: ecommerce-rabbitmq
+    rules:
+      - alert: RabbitMQQueueDepthHigh
+        expr: >
+          rabbitmq_queue_messages{queue!~".*dlq.*"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue {{ $labels.queue }} depth > 1000"
+          description: "Queue {{ $labels.queue }} has {{ $value }} unprocessed messages. Consumer throughput may be lagging."
+
+      - alert: RabbitMQQueueDeadLettered
+        expr: >
+          rabbitmq_queue_messages{queue=~".*dlq.*"} > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dead-letter queue {{ $labels.queue }} has {{ $value }} messages"
+          description: "Messages are being dead-lettered. Inspect DLQ consumers and check for deserialization errors."
+
+      - alert: RabbitMQConnectionDropped
+        expr: >
+          rabbitmq_connections < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ has no active connections"
+          description: "All connections to RabbitMQ have been lost. Services may be reconnecting or the broker is unreachable."
+
+  - name: ecommerce-postgres
+    rules:
+      - alert: PostgreSQLReplicationLag
+        expr: >
+          pg_replication_lag_seconds > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL replication lag > 10s on {{ $labels.instance }}"
+          description: "Replication lag is {{ $value | humanizeDuration }}. Replica is falling behind; failover risk is elevated."
+
+      - alert: PostgreSQLHighConnectionUtilization
+        expr: >
+          sum by (datname) (pg_stat_activity_count{state="active"})
+          /
+          pg_settings_max_connections
+          > 0.80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection pool > 80% on {{ $labels.datname }}"
+          description: "{{ $value | humanizePercentage }} of max_connections in use. Consider connection pooling via PgBouncer."
+
+  - name: ecommerce-rate-limiting
+    rules:
+      - alert: HighRateLimitRejectionRate
+        expr: >
+          sum by (job) (rate(http_requests_received_total{code="429"}[5m])) > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate-limit rejection rate on {{ $labels.job }}"
+          description: "{{ $value | humanize }} requests/s are being rate-limited on {{ $labels.job }}. Possible client misbehavior or DDoS."
