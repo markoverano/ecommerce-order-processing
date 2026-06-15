@@ -1,12 +1,13 @@
 using ECommerceOrderProcessing.Infrastructure.OutboxStore;
+using ECommerceOrderProcessing.Infrastructure.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceOrderProcessing.Infrastructure.Persistence;
 
 /// <summary>
 /// Shared EF Core base that every service DbContext inherits from.
-/// Provides the events, outbox, and processed_webhooks tables required by the event-sourcing,
-/// outbox, and webhook-deduplication patterns.
+/// Provides the events, outbox, processed_webhooks, and snapshots tables required by the
+/// event-sourcing, outbox, webhook-deduplication, and snapshot patterns.
 /// </summary>
 public abstract class DbContextBase : DbContext
 {
@@ -15,6 +16,7 @@ public abstract class DbContextBase : DbContext
     public DbSet<StoredEvent> Events => Set<StoredEvent>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedWebhook> ProcessedWebhooks => Set<ProcessedWebhook>();
+    public DbSet<AggregateSnapshot> Snapshots => Set<AggregateSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +24,7 @@ public abstract class DbContextBase : DbContext
         ConfigureEvents(modelBuilder);
         ConfigureOutbox(modelBuilder);
         ConfigureProcessedWebhooks(modelBuilder);
+        ConfigureSnapshots(modelBuilder);
     }
 
     private static void ConfigureEvents(ModelBuilder modelBuilder)
@@ -68,6 +71,22 @@ public abstract class DbContextBase : DbContext
             e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
             e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
             e.HasIndex(x => x.WebhookId).IsUnique();
+        });
+    }
+
+    private static void ConfigureSnapshots(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AggregateSnapshot>(e =>
+        {
+            e.ToTable("snapshots");
+            e.HasKey(x => x.SnapshotId);
+            e.Property(x => x.SnapshotId).HasColumnName("snapshot_id").UseIdentityAlwaysColumn();
+            e.Property(x => x.AggregateId).HasColumnName("aggregate_id");
+            e.Property(x => x.AggregateType).HasColumnName("aggregate_type").HasMaxLength(200);
+            e.Property(x => x.Version).HasColumnName("version");
+            e.Property(x => x.StateJson).HasColumnName("state_json").HasColumnType("jsonb");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.HasIndex(x => new { x.AggregateId, x.Version }).IsUnique();
         });
     }
 }
