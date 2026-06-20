@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>AnalyticsService.Domain</AssemblyName>
+    <RootNamespace>AnalyticsService.Domain</RootNamespace>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ECommerceOrderProcessing.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

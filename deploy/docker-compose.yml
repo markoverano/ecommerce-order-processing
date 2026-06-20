@@ -498,6 +498,49 @@ services:
       keycloak:
         condition: service_healthy
 
+  analytics-service:
+    build:
+      context: ..
+      dockerfile: src/AnalyticsService/Api/Dockerfile
+    container_name: analytics-service
+    networks: [ecommerce-api, ecommerce-db, ecommerce-messaging, ecommerce-observability]
+    ports:
+      - "5008:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__AnalyticsDb: "Host=postgres;Port=5432;Database=analytics_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASS}
+      Redis__ConnectionString: "redis:6379"
+      Jaeger__Endpoint: "http://jaeger:4317"
+      Elasticsearch__Uri: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: ${ELASTIC_PASSWORD}
+      Oidc__Authority: "http://keycloak:8080/realms/ecommerce"
+      Oidc__RequireHttpsMetadata: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   # ── API Gateway ──────────────────────────────────────────────────────────────
   # DB-less mode: config is loaded entirely from kong/kong.yml at startup.
   # Admin API is restricted to localhost — never expose 0.0.0.0:8001 in production.
