@@ -41,11 +41,12 @@ public sealed class ReserveStockCommandHandler : IRequestHandler<ReserveStockCom
 
         var productIds = command.Items.Select(i => i.ProductId).ToList();
         var products = await _productRepository.GetByIdsAsync(productIds, cancellationToken);
+        var productLookup = products.ToDictionary(p => p.ProductId);
 
         // Validate all products exist before attempting any reservation.
         foreach (var item in command.Items)
         {
-            if (!products.Any(p => p.ProductId == item.ProductId))
+            if (!productLookup.TryGetValue(item.ProductId, out _))
                 return ServiceResponse<ReservationId>.Failure("PRODUCT_NOT_FOUND", $"Product {item.ProductId} was not found.");
         }
 
@@ -54,7 +55,7 @@ public sealed class ReserveStockCommandHandler : IRequestHandler<ReserveStockCom
         int availableQty = 0;
         foreach (var item in command.Items)
         {
-            var product = products.First(p => p.ProductId == item.ProductId);
+            var product = productLookup[item.ProductId];
             if (product.AvailableQuantity < item.Quantity)
             {
                 unavailableItem = item;
@@ -89,7 +90,7 @@ public sealed class ReserveStockCommandHandler : IRequestHandler<ReserveStockCom
         var modifiedProducts = new List<Product>();
         foreach (var item in command.Items)
         {
-            var product = products.First(p => p.ProductId == item.ProductId);
+            var product = productLookup[item.ProductId];
             product.TryReserve(item.Quantity);
             modifiedProducts.Add(product);
         }
