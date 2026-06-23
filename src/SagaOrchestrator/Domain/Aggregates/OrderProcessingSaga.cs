@@ -7,6 +7,36 @@ using SagaOrchestrator.Domain.Exceptions;
 
 namespace SagaOrchestrator.Domain.Aggregates;
 
+file static class SagaTransitions
+{
+    public static (SagaStatus?, SagaStep?) GetNextState(SagaStatus status, string step)
+    {
+        if (status == SagaStatus.Running)
+        {
+            return step switch
+            {
+                nameof(SagaStep.PaymentPending) => (SagaStatus.Running, SagaStep.InventoryPending),
+                nameof(SagaStep.InventoryPending) => (SagaStatus.Running, SagaStep.ShippingPending),
+                "InventoryPending.OutOfStock" => (SagaStatus.Compensating, SagaStep.PaymentCompensation),
+                nameof(SagaStep.ShippingPending) => (SagaStatus.Running, SagaStep.NotificationPending),
+                "ShippingPending.Failed" => (SagaStatus.Compensating, SagaStep.InventoryCompensation),
+                _ => (null, null)
+            };
+        }
+
+        if (status == SagaStatus.Compensating)
+        {
+            return step switch
+            {
+                nameof(SagaStep.InventoryCompensation) => (SagaStatus.Compensating, SagaStep.PaymentCompensation),
+                _ => (null, null)
+            };
+        }
+
+        return (null, null);
+    }
+}
+
 public sealed class OrderProcessingSaga : AggregateRoot
 {
     public OrderId OrderId { get; private set; }
@@ -178,30 +208,13 @@ public sealed class OrderProcessingSaga : AggregateRoot
                 CurrentStep = SagaStep.PaymentPending;
                 break;
 
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.PaymentPending):
-                CurrentStep = SagaStep.InventoryPending;
-                break;
-
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.InventoryPending):
-                CurrentStep = SagaStep.ShippingPending;
-                break;
-
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.InventoryPending) + ".OutOfStock":
-                Status = SagaStatus.Compensating;
-                CurrentStep = SagaStep.PaymentCompensation;
-                break;
-
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.ShippingPending):
-                CurrentStep = SagaStep.NotificationPending;
-                break;
-
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.ShippingPending) + ".Failed":
-                Status = SagaStatus.Compensating;
-                CurrentStep = SagaStep.InventoryCompensation;
-                break;
-
-            case SagaStepCompleted e when e.Step == nameof(SagaStep.InventoryCompensation):
-                CurrentStep = SagaStep.PaymentCompensation;
+            case SagaStepCompleted e:
+                var (newStatus, newStep) = SagaTransitions.GetNextState(Status, e.Step);
+                if (newStatus.HasValue)
+                {
+                    Status = newStatus.Value;
+                    CurrentStep = newStep!.Value;
+                }
                 break;
 
             case SagaCompleted:

@@ -14,6 +14,14 @@ using NotificationService.Domain.Repositories;
 
 namespace NotificationService.Application.Commands;
 
+file static class NotificationChannels
+{
+    public const string Email = "email";
+    public const string Sms = "sms";
+}
+
+file record NotificationTemplate(string Subject, string Body);
+
 public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustomerCommand, ServiceResponse<NotificationId>>
 {
     private readonly INotificationRepository _repository;
@@ -43,10 +51,7 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
     {
         var validation = await _validator.ValidateAsync(command, cancellationToken);
         if (!validation.IsValid)
-        {
-            var errors = string.Join("; ", validation.Errors.Select(e => e.ErrorMessage));
-            return ServiceResponse<NotificationId>.Failure("VALIDATION_FAILED", errors);
-        }
+            return validation.ToFailureResponse<NotificationId>();
 
         var hasEmail = command.TemplateData.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email);
         var hasPhone = command.TemplateData.TryGetValue("phone", out var phone) && !string.IsNullOrWhiteSpace(phone);
@@ -55,7 +60,7 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
             return ServiceResponse<NotificationId>.Failure("NO_RECIPIENT",
                 "TemplateData must contain 'email' or 'phone' to deliver the notification.");
 
-        var channel = hasEmail ? "email" : "sms";
+        var channel = hasEmail ? NotificationChannels.Email : NotificationChannels.Sms;
         var recipient = hasEmail ? email! : phone!;
 
         var notification = Notification.Create(
@@ -69,11 +74,11 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
 
         try
         {
-            if (channel == "email")
+            var template = GetTemplate(channel, command.NotificationType);
+            if (channel == NotificationChannels.Email)
             {
-                var subject = BuildSubject(command.NotificationType);
-                var body = BuildEmailBody(command.NotificationType, command.TemplateData);
-                var result = await _mailgun.SendEmailAsync(email!, subject, body, notification.NotificationId.Value, cancellationToken);
+                var body = template.Body.Replace("{orderId}", command.TemplateData.TryGetValue("orderId", out var oid) ? oid : "your order");
+                var result = await _mailgun.SendEmailAsync(email!, template.Subject, body, notification.NotificationId.Value, cancellationToken);
 
                 if (result.IsSuccess)
                     notification.MarkAsSent(result.MessageId, command.CorrelationId);
@@ -82,8 +87,8 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
             }
             else
             {
-                var message = BuildSmsBody(command.NotificationType, command.TemplateData);
-                var result = await _twilio.SendSmsAsync(phone!, message, notification.NotificationId.Value, cancellationToken);
+                var body = template.Body.Replace("{orderId}", command.TemplateData.TryGetValue("orderId", out var oid) ? oid : "your order");
+                var result = await _twilio.SendSmsAsync(phone!, body, notification.NotificationId.Value, cancellationToken);
 
                 if (result.IsSuccess)
                     notification.MarkAsSent(result.MessageSid, command.CorrelationId);
@@ -118,38 +123,31 @@ public sealed class NotifyCustomerCommandHandler : IRequestHandler<NotifyCustome
         return ServiceResponse<NotificationId>.Success(notification.NotificationId);
     }
 
-    private static string BuildSubject(string notificationType) => notificationType switch
+    private static NotificationTemplate GetTemplate(string channel, string notificationType)
     {
-        "OrderConfirmed" => "Your order has been confirmed",
-        "ShipmentDispatched" => "Your order is on its way",
-        "DeliveryConfirmed" => "Your order has been delivered",
-        "OrderFailed" => "There was a problem with your order",
-        _ => "Order update"
-    };
-
-    private static string BuildEmailBody(string notificationType, IReadOnlyDictionary<string, string> data)
-    {
-        var orderId = data.TryGetValue("orderId", out var oid) ? oid : "your order";
-        return notificationType switch
+        var templates = new Dictionary<string, Dictionary<string, NotificationTemplate>>
         {
-            "OrderConfirmed" => $"Your order {orderId} has been confirmed and is being processed.",
-            "ShipmentDispatched" => $"Your order {orderId} has been dispatched.",
-            "DeliveryConfirmed" => $"Your order {orderId} has been delivered.",
-            "OrderFailed" => $"Unfortunately, your order {orderId} could not be completed.",
-            _ => $"There is an update on your order {orderId}."
+            [NotificationChannels.Email] = new()
+            {
+                ["OrderConfirmed"] = new("Your order has been confirmed", "Your order {orderId} has been confirmed and is being processed."),
+                ["ShipmentDispatched"] = new("Your order is on its way", "Your order {orderId} has been dispatched."),
+                ["DeliveryConfirmed"] = new("Your order has been delivered", "Your order {orderId} has been delivered."),
+                ["OrderFailed"] = new("There was a problem with your order", "Unfortunately, your order {orderId} could not be completed."),
+            },
+            [NotificationChannels.Sms] = new()
+            {
+                ["OrderConfirmed"] = new("", "Order {orderId} confirmed."),
+                ["ShipmentDispatched"] = new("", "Order {orderId} dispatched."),
+                ["DeliveryConfirmed"] = new("", "Order {orderId} delivered."),
+                ["OrderFailed"] = new("", "Order {orderId} failed."),
+            }
         };
-    }
 
-    private static string BuildSmsBody(string notificationType, IReadOnlyDictionary<string, string> data)
-    {
-        var orderId = data.TryGetValue("orderId", out var oid) ? oid : "your order";
-        return notificationType switch
-        {
-            "OrderConfirmed" => $"Order {orderId} confirmed.",
-            "ShipmentDispatched" => $"Order {orderId} dispatched.",
-            "DeliveryConfirmed" => $"Order {orderId} delivered.",
-            "OrderFailed" => $"Order {orderId} failed.",
-            _ => $"Update on order {orderId}."
-        };
+        if (templates.TryGetValue(channel, out var channelTemplates) && channelTemplates.TryGetValue(notificationType, out var template))
+            return template;
+
+        return channel == NotificationChannels.Email
+            ? new("Order update", "There is an update on your order {orderId}.")
+            : new("", "Update on order {orderId}.");
     }
 }

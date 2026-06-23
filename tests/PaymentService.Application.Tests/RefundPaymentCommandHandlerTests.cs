@@ -28,7 +28,7 @@ public sealed class RefundPaymentCommandHandlerTests
         repoMock.Setup(r => r.GetByIdAsync(It.IsAny<PaymentId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Payment?)null);
 
-        var handler = BuildHandler(repoMock.Object, new Mock<IStripePaymentGateway>().Object);
+        var handler = BuildHandler(repoMock.Object, new Mock<IStripePaymentClient>().Object);
         var command = BuildRefundCommand(PaymentId.New());
 
         var result = await handler.Handle(command, CancellationToken.None);
@@ -45,7 +45,7 @@ public sealed class RefundPaymentCommandHandlerTests
         repoMock.Setup(r => r.GetByIdAsync(payment.PaymentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(payment);
 
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock.Setup(s => s.RefundAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StripeRefundResult(true, null));
 
@@ -71,7 +71,7 @@ public sealed class RefundPaymentCommandHandlerTests
         repoMock.Setup(r => r.GetByIdAsync(payment.PaymentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(payment);
 
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock.Setup(s => s.RefundAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StripeRefundResult(false, "Refund declined."));
 
@@ -92,7 +92,7 @@ public sealed class RefundPaymentCommandHandlerTests
         repoMock.Setup(r => r.GetByIdAsync(payment.PaymentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(payment);
 
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock.Setup(s => s.RefundAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new PaymentProcessingException("Refund rejected by Stripe."));
 
@@ -117,6 +117,6 @@ public sealed class RefundPaymentCommandHandlerTests
 
     private static RefundPaymentCommandHandler BuildHandler(
         IPaymentRepository repository,
-        IStripePaymentGateway stripe) =>
+        IStripePaymentClient stripe) =>
         new(repository, stripe, NullLogger<RefundPaymentCommandHandler>.Instance);
 }

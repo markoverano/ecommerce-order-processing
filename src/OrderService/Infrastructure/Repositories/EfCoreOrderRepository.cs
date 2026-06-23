@@ -164,24 +164,17 @@ public sealed class EfCoreOrderRepository : IOrderRepository
 
     private Task InsertViewModelAsync(Order order, OrderCreated created, CancellationToken cancellationToken)
     {
-        var itemDtos = created.Items.Select(i => new
-        {
-            productId = i.ProductId.Value,
-            quantity = i.Quantity,
-            unitPrice = i.UnitPrice.Amount,
-            lineTotal = i.LineTotal.Amount,
-            currency = i.UnitPrice.Currency
-        });
+        var itemDtos = created.Items
+            .Select(i => new OrderItemViewDto(i.ProductId.Value, i.Quantity, i.UnitPrice.Amount, i.LineTotal.Amount, i.UnitPrice.Currency))
+            .ToList();
 
-        var addressDto = new
-        {
-            line1 = order.ShippingAddress.Line1,
-            line2 = order.ShippingAddress.Line2,
-            city = order.ShippingAddress.City,
-            state = order.ShippingAddress.State,
-            postalCode = order.ShippingAddress.PostalCode,
-            countryCode = order.ShippingAddress.CountryCode
-        };
+        var addressDto = new AddressViewDto(
+            order.ShippingAddress.Line1,
+            order.ShippingAddress.Line2,
+            order.ShippingAddress.City,
+            order.ShippingAddress.State,
+            order.ShippingAddress.PostalCode,
+            order.ShippingAddress.CountryCode);
 
         var viewModel = new OrderReadModel
         {
@@ -225,3 +218,7 @@ file sealed record OrderSnapshotState(
     string Status);
 
 file sealed record OrderItemSnapshotData(Guid ProductId, int Quantity, decimal UnitPrice, string Currency);
+
+file sealed record OrderItemViewDto(Guid ProductId, int Quantity, decimal UnitPrice, decimal LineTotal, string Currency);
+
+file sealed record AddressViewDto(string Line1, string? Line2, string City, string State, string PostalCode, string CountryCode);

@@ -95,7 +95,7 @@ try
     builder.Services.AddSingleton<IReadOnlyPolicyRegistry<string>>(policyRegistry);
     builder.Services.AddSingleton<IPolicyRegistry<string>>(policyRegistry);
 
-    builder.Services.AddSingleton<IStripePaymentGateway, StripePaymentGateway>();
+    builder.Services.AddSingleton<IStripePaymentClient, StripePaymentClient>();
 
     builder.Services.AddMediatR(cfg =>
         cfg.RegisterServicesFromAssemblyContaining<ProcessPaymentCommandHandler>());

@@ -12,12 +12,12 @@ namespace PaymentService.Application.Commands;
 public sealed class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand, ServiceResponse<bool>>
 {
     private readonly IPaymentRepository _repository;
-    private readonly IStripePaymentGateway _stripe;
+    private readonly IStripePaymentClient _stripe;
     private readonly ILogger<RefundPaymentCommandHandler> _logger;
 
     public RefundPaymentCommandHandler(
         IPaymentRepository repository,
-        IStripePaymentGateway stripe,
+        IStripePaymentClient stripe,
         ILogger<RefundPaymentCommandHandler> logger)
     {
         _repository = repository;

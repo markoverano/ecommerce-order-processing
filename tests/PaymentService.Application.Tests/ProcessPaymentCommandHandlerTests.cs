@@ -26,7 +26,7 @@ public sealed class ProcessPaymentCommandHandlerTests
     public async Task Handle_WhenStripeSucceeds_SavesProcessedPaymentAndReturnsId()
     {
         var repoMock = new Mock<IPaymentRepository>();
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock
             .Setup(s => s.ChargeAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<Guid>(), It.IsAny<OrderId>(), It.IsAny<CustomerId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StripeChargeResult(true, "ch_testcharge", null));
@@ -50,7 +50,7 @@ public sealed class ProcessPaymentCommandHandlerTests
     public async Task Handle_WhenStripeReturnsFailure_SavesFailedPaymentAndReturnsId()
     {
         var repoMock = new Mock<IPaymentRepository>();
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock
             .Setup(s => s.ChargeAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<Guid>(), It.IsAny<OrderId>(), It.IsAny<CustomerId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StripeChargeResult(false, null, "Your card was declined."));
@@ -74,7 +74,7 @@ public sealed class ProcessPaymentCommandHandlerTests
     public async Task Handle_WhenStripeThrowsPaymentProcessingException_SavesFailedPaymentAndReturnsId()
     {
         var repoMock = new Mock<IPaymentRepository>();
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock
             .Setup(s => s.ChargeAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<Guid>(), It.IsAny<OrderId>(), It.IsAny<CustomerId>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new PaymentProcessingException("Card declined by issuer."));
@@ -97,7 +97,7 @@ public sealed class ProcessPaymentCommandHandlerTests
     public async Task Handle_WithEmptyPaymentMethodId_ReturnsValidationFailure()
     {
         var repoMock = new Mock<IPaymentRepository>();
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
 
         var handler = BuildHandler(repoMock.Object, stripeMock.Object);
 
@@ -115,7 +115,7 @@ public sealed class ProcessPaymentCommandHandlerTests
     public async Task Handle_WhenStripeSucceeds_ReturnedPaymentIdMatchesSavedPayment()
     {
         var repoMock = new Mock<IPaymentRepository>();
-        var stripeMock = new Mock<IStripePaymentGateway>();
+        var stripeMock = new Mock<IStripePaymentClient>();
         stripeMock
             .Setup(s => s.ChargeAsync(It.IsAny<string>(), It.IsAny<Money>(), It.IsAny<Guid>(), It.IsAny<OrderId>(), It.IsAny<CustomerId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StripeChargeResult(true, "ch_testcharge", null));
@@ -135,6 +135,6 @@ public sealed class ProcessPaymentCommandHandlerTests
 
     private static ProcessPaymentCommandHandler BuildHandler(
         IPaymentRepository repository,
-        IStripePaymentGateway stripe) =>
+        IStripePaymentClient stripe) =>
         new(repository, stripe, new ProcessPaymentCommandValidator(), NullLogger<ProcessPaymentCommandHandler>.Instance);
 }

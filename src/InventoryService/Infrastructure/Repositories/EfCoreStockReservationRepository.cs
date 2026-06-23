@@ -199,14 +199,21 @@ public sealed class EfCoreStockReservationRepository : IStockReservationReposito
         IReadOnlyList<Product> modifiedProducts,
         CancellationToken cancellationToken)
     {
+        if (modifiedProducts.Count == 0)
+            return;
+
+        var productIds = modifiedProducts.Select(p => p.ProductId.Value).ToList();
+        var readModels = await _db.Products.Where(p => productIds.Contains(p.Id)).ToListAsync(cancellationToken);
+        var readModelMap = readModels.ToDictionary(r => r.Id);
+
+        var now = DateTimeOffset.UtcNow;
         foreach (var product in modifiedProducts)
         {
-            var readModel = await _db.Products.FindAsync(new object[] { product.ProductId.Value }, cancellationToken);
-            if (readModel is not null)
+            if (readModelMap.TryGetValue(product.ProductId.Value, out var readModel))
             {
                 readModel.AvailableQuantity = product.AvailableQuantity;
                 readModel.ReservedQuantity = product.ReservedQuantity;
-                readModel.UpdatedAt = DateTimeOffset.UtcNow;
+                readModel.UpdatedAt = now;
             }
         }
     }

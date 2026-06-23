@@ -12,17 +12,17 @@ using Stripe;
 
 namespace PaymentService.Infrastructure.ExternalClients;
 
-public sealed class StripePaymentGateway : IStripePaymentGateway
+public sealed class StripePaymentClient : IStripePaymentClient
 {
     private readonly ChargeService _chargeService;
     private readonly RefundService _refundService;
     private readonly IAsyncPolicy _policy;
-    private readonly ILogger<StripePaymentGateway> _logger;
+    private readonly ILogger<StripePaymentClient> _logger;
 
-    public StripePaymentGateway(
+    public StripePaymentClient(
         IConfiguration configuration,
         IReadOnlyPolicyRegistry<string> registry,
-        ILogger<StripePaymentGateway> logger)
+        ILogger<StripePaymentClient> logger)
     {
         var apiKey = configuration["Stripe__ApiKey"]
             ?? throw new InvalidOperationException("Stripe__ApiKey is not configured.");

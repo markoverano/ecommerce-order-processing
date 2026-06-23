@@ -17,13 +17,13 @@ namespace PaymentService.Application.Commands;
 public sealed class ProcessPaymentCommandHandler : IRequestHandler<ProcessPaymentCommand, ServiceResponse<PaymentId>>
 {
     private readonly IPaymentRepository _repository;
-    private readonly IStripePaymentGateway _stripe;
+    private readonly IStripePaymentClient _stripe;
     private readonly ProcessPaymentCommandValidator _validator;
     private readonly ILogger<ProcessPaymentCommandHandler> _logger;
 
     public ProcessPaymentCommandHandler(
         IPaymentRepository repository,
-        IStripePaymentGateway stripe,
+        IStripePaymentClient stripe,
         ProcessPaymentCommandValidator validator,
         ILogger<ProcessPaymentCommandHandler> logger)
     {
