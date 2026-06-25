@@ -6,6 +6,7 @@ public record InventoryMetric
     public required Guid ProductId { get; init; }
     public required Guid ReservationId { get; init; }
     public int QuantityReserved { get; set; }
+    public DateTime ReservedAt { get; init; }
     public int? DurationHours { get; set; }
     public DateTime? ReleasedAt { get; set; }
 
@@ -15,7 +16,8 @@ public record InventoryMetric
         {
             ProductId = productId,
             ReservationId = reservationId,
-            QuantityReserved = quantityReserved
+            QuantityReserved = quantityReserved,
+            ReservedAt = DateTime.UtcNow
         };
     }
 }

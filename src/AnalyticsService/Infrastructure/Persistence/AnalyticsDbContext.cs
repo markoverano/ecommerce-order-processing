@@ -53,7 +53,8 @@ public class AnalyticsDbContext : DbContextBase
         modelBuilder.Entity<InventoryMetric>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.ReservationId).IsUnique();
+            // Composite unique: one record per product per reservation
+            entity.HasIndex(e => new { e.ReservationId, e.ProductId }).IsUnique();
             entity.HasIndex(e => e.ProductId);
         });
 

@@ -10,6 +10,7 @@ public record ShippingMetric
     public DateTime? DispatchedAt { get; set; }
     public DateTime? DeliveredAt { get; set; }
     public string? Destination { get; set; }
+    public string? FailureReason { get; set; }
 
     public static ShippingMetric Create(Guid shipmentId, string? carrier = null, string? trackingNumber = null)
     {
